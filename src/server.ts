@@ -1,16 +1,16 @@
-import express from 'express';
-import dotenv from 'dotenv';
+import app from './app.js';
+import { bot } from './bot/bot.js';
+import env from './config/env.js';
 import logger from './shared/utils/logger.js';
 
-dotenv.config();
-
-const app = express();
-const port = process.env.PORT || 3000;
-
-app.get('/', (_req, res) => {
-  res.send('Hello World!');
+app.listen(env.port, () => {
+  logger.info(`App is running on port ${env.port}`);
 });
 
-app.listen(port, () => {
-  logger.info(`App is running on port ${port}`);
-});
+bot
+  .start({
+    drop_pending_updates: true,
+  })
+  .catch((error) => {
+    logger.error(`Failed to start Telegram bot: ${error.message}`);
+  });
