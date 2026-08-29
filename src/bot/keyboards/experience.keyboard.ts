@@ -1,7 +1,11 @@
 import { InlineKeyboard } from 'grammy';
 
 export const experienceKeyboard = new InlineKeyboard()
-  .text('Junior', 'experience_junior')
-  .text('Mid', 'experience_mid')
+  .text('Intern', 'experience:intern')
+  .text('Junior', 'experience:junior')
   .row()
-  .text('Senior', 'experience_senior');
+  .text('Mid', 'experience:mid')
+  .text('Senior', 'experience:senior')
+  .row()
+  .text('Lead', 'experience:lead')
+  .text('Any', 'experience:any');
