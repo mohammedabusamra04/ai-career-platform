@@ -1,8 +1,20 @@
-export type WorkType = 'remote' | 'hybrid' | 'on-site' | 'any';
+export enum WorkType {
+  REMOTE = 'remote',
+  HYBRID = 'hybrid',
+  ON_SITE = 'on-site',
+  ANY = 'any',
+}
 
-export type ExperienceLevel = 'intern' | 'junior' | 'mid' | 'senior' | 'lead' | 'any';
+export enum ExperienceLevel {
+  INTERN = 'intern',
+  JUNIOR = 'junior',
+  MID = 'mid',
+  SENIOR = 'senior',
+  LEAD = 'lead',
+  ANY = 'any',
+}
 
-export interface JobPreferences {
+export interface UserPreferences {
   jobTitle: string;
   workType: WorkType;
   experienceLevel: ExperienceLevel;
