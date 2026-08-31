@@ -1,15 +1,4 @@
-import type { ExperienceLevel, WorkType } from './preference.types.js';
-
-const WORK_TYPES: readonly WorkType[] = ['remote', 'hybrid', 'on-site', 'any'];
-
-const EXPERIENCE_LEVELS: readonly ExperienceLevel[] = [
-  'intern',
-  'junior',
-  'mid',
-  'senior',
-  'lead',
-  'any',
-];
+import { ExperienceLevel, WorkType } from './preference.types.js';
 
 export function normalizeJobTitle(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
@@ -22,11 +11,11 @@ export function validateJobTitle(value: string): boolean {
 }
 
 export function isValidWorkType(value: string): value is WorkType {
-  return WORK_TYPES.includes(value as WorkType);
+  return Object.values(WorkType).includes(value as WorkType);
 }
 
 export function isValidExperienceLevel(value: string): value is ExperienceLevel {
-  return EXPERIENCE_LEVELS.includes(value as ExperienceLevel);
+  return Object.values(ExperienceLevel).includes(value as ExperienceLevel);
 }
 
 export function normalizeLocation(value: string): string | undefined {
