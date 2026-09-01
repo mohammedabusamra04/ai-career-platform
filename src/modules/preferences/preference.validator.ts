@@ -1,4 +1,4 @@
-import { ExperienceLevel, WorkType } from './preference.types.js';
+import { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
 export function normalizeJobTitle(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
