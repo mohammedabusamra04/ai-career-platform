@@ -6,7 +6,8 @@ import type { Cache } from '../../cache/cache.interface.js';
 
 import { AppError } from '../../shared/errors/AppError.js';
 
-import type { ExperienceLevel, UserPreferences, WorkType } from './preference.types.js';
+import type { UserPreferences } from './preference.types.js';
+import type { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
 import {
   isValidExperienceLevel,
