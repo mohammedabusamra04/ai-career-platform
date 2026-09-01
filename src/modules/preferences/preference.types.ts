@@ -1,18 +1,4 @@
-export enum WorkType {
-  REMOTE = 'remote',
-  HYBRID = 'hybrid',
-  ON_SITE = 'on-site',
-  ANY = 'any',
-}
-
-export enum ExperienceLevel {
-  INTERN = 'intern',
-  JUNIOR = 'junior',
-  MID = 'mid',
-  SENIOR = 'senior',
-  LEAD = 'lead',
-  ANY = 'any',
-}
+import { WorkType, ExperienceLevel } from '../../shared/types/job.js';
 
 export interface UserPreferences {
   jobTitle: string;
