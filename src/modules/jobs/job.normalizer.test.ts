@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizeJob } from './job.normalizer.js';
 import { validateJob } from './job.validator.js';
-import { JobSource } from './job.types.js';
+import { JobSourceType } from './job.types.js';
 import { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
 describe('Job normalization', () => {
@@ -10,7 +10,7 @@ describe('Job normalization', () => {
     const rawJob = {
       title: '  Node.js Developer  ',
       company: '  Google  ',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: '  https://example.com/job  ',
       location: '  Remote  ',
       country: '  Palestine  ',
@@ -28,7 +28,7 @@ describe('Job normalization', () => {
     expect(job.applicationUrl).toBe('https://example.com/job');
     expect(job.location).toBe('Remote');
     expect(job.country).toBe('Palestine');
-    expect(job.source).toBe(JobSource.LINKEDIN);
+    expect(job.source).toBe(JobSourceType.LINKEDIN);
     expect(job.workType).toBe(WorkType.REMOTE);
     expect(job.experienceLevel).toBe(ExperienceLevel.JUNIOR);
     expect(job.description).toBe('Backend developer position');
@@ -55,7 +55,7 @@ describe('Job validation', () => {
     const job = normalizeJob({
       title: 'Backend Developer',
       company: 'Google',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: 'https://example.com/job',
       publicationDate: '2026-08-27T10:00:00Z',
     });
@@ -67,7 +67,7 @@ describe('Job validation', () => {
     const job = normalizeJob({
       title: '',
       company: 'Google',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: 'https://example.com/job',
       publicationDate: '2026-08-27T10:00:00Z',
     });
@@ -79,7 +79,7 @@ describe('Job validation', () => {
     const job = normalizeJob({
       title: 'Backend Developer',
       company: '',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: 'https://example.com/job',
       publicationDate: '2026-08-27T10:00:00Z',
     });
@@ -91,7 +91,7 @@ describe('Job validation', () => {
     const job = normalizeJob({
       title: 'Backend Developer',
       company: 'Google',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: '',
       publicationDate: '2026-08-27T10:00:00Z',
     });
@@ -102,7 +102,7 @@ describe('Job validation', () => {
     const job = normalizeJob({
       title: 'Backend Developer',
       company: 'Google',
-      source: JobSource.LINKEDIN,
+      source: JobSourceType.LINKEDIN,
       applicationUrl: 'not-a-url',
       publicationDate: '2026-08-27T10:00:00Z',
     });
