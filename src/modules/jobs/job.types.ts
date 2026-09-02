@@ -1,6 +1,6 @@
 import { WorkType, ExperienceLevel } from '../../shared/types/job.js';
 
-export enum JobSource {
+export enum JobSourceType {
   MOSTAQEL = 'mostaqel',
   BAEED = 'baeed',
   TAQNEEB = 'taqneeb',
@@ -16,7 +16,7 @@ export enum JobSource {
 export interface Job {
   title: string;
   company: string;
-  source: JobSource;
+  source: JobSourceType;
   applicationUrl: string;
 
   location?: string;
