@@ -1,11 +1,11 @@
 import type { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
-import { Job, JobSource } from './job.types.js';
+import { Job, JobSourceType } from './job.types.js';
 
 export interface RawJob {
   title?: string;
   company?: string;
-  source?: JobSource;
+  source?: JobSourceType;
   applicationUrl?: string;
 
   location?: string;
@@ -24,7 +24,7 @@ export function normalizeJob(rawJob: RawJob): Job {
   return {
     title: rawJob.title?.trim() ?? '',
     company: rawJob.company?.trim() ?? '',
-    source: rawJob.source ?? JobSource.OTHER,
+    source: rawJob.source ?? JobSourceType.OTHER,
     applicationUrl: rawJob.applicationUrl?.trim() ?? '',
 
     location: rawJob.location?.trim(),
