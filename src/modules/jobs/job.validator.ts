@@ -1,4 +1,4 @@
-import { JobSource } from './job.types.js';
+import { JobSourceType } from './job.types.js';
 import type { Job } from './job.types.js';
 
 export function validateJob(job: Job): boolean {
@@ -6,7 +6,7 @@ export function validateJob(job: Job): boolean {
     job.title.trim().length > 0 &&
     job.company.trim().length > 0 &&
     isValidUrl(job.applicationUrl) &&
-    Object.values(JobSource).includes(job.source) &&
+    Object.values(JobSourceType).includes(job.source) &&
     job.publicationDate instanceof Date &&
     !Number.isNaN(job.publicationDate.getTime()) &&
     job.scrapedAt instanceof Date &&
