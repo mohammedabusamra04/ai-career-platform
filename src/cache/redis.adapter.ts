@@ -11,7 +11,7 @@ export class RedisAdapter implements Cache {
     try {
       const data = JSON.stringify(value);
 
-      if (ttl) {
+      if (ttl !== undefined) {
         await this.client.set(key, data, {
           EX: ttl,
         });

@@ -1,8 +1,8 @@
-import ms from 'ms';
-
 import redisClient from '../../config/redis.js';
 import { RedisAdapter } from '../../cache/redis.adapter.js';
 import type { Cache } from '../../cache/cache.interface.js';
+import { cacheKeys } from '../../cache/cache.keys.js';
+import { CACHE_TTL } from '../../cache/cache.ttl.js';
 
 import { AppError } from '../../shared/errors/AppError.js';
 
@@ -18,14 +18,8 @@ import {
   validateJobTitle,
 } from './preference.validator.js';
 
-const PREFERENCES_TTL = ms('24h') / 1000;
-
 export class PreferenceService {
   constructor(private readonly cache: Cache) {}
-
-  private getKey(userId: number): string {
-    return `preferences:${userId}`;
-  }
 
   createPreferences(input: {
     jobTitle: string;
@@ -58,11 +52,11 @@ export class PreferenceService {
   }
 
   async savePreferences(userId: number, preferences: UserPreferences): Promise<void> {
-    await this.cache.set(this.getKey(userId), preferences, PREFERENCES_TTL);
+    await this.cache.set(cacheKeys.preferences(String(userId)), preferences, CACHE_TTL.PREFERENCES);
   }
 
   async getPreferences(userId: number): Promise<UserPreferences | null> {
-    return this.cache.get<UserPreferences>(this.getKey(userId));
+    return this.cache.get<UserPreferences>(cacheKeys.preferences(String(userId)));
   }
 
   async updatePreferences(userId: number, preferences: Partial<UserPreferences>): Promise<void> {
@@ -77,11 +71,15 @@ export class PreferenceService {
       ...preferences,
     };
 
-    await this.cache.set(this.getKey(userId), updatedPreferences, PREFERENCES_TTL);
+    await this.cache.set(
+      cacheKeys.preferences(String(userId)),
+      updatedPreferences,
+      CACHE_TTL.PREFERENCES,
+    );
   }
 
   async deletePreferences(userId: number): Promise<void> {
-    await this.cache.delete(this.getKey(userId));
+    await this.cache.delete(cacheKeys.preferences(String(userId)));
   }
 }
 
