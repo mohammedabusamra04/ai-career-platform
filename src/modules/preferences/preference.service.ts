@@ -46,34 +46,20 @@ export class PreferenceService {
       jobTitle,
       workType: input.workType as WorkType,
       experienceLevel: input.experienceLevel as ExperienceLevel,
-      location: input.location
-        ? normalizeLocation(input.location)
-        : undefined,
+      location: input.location ? normalizeLocation(input.location) : undefined,
       skills: input.skills ? normalizeSkills(input.skills) : undefined,
     };
   }
 
-  async savePreferences(
-    userId: number,
-    preferences: UserPreferences,
-  ): Promise<void> {
-    await this.cache.set(
-      cacheKeys.preferences(String(userId)),
-      preferences,
-      CACHE_TTL.PREFERENCES,
-    );
+  async savePreferences(userId: number, preferences: UserPreferences): Promise<void> {
+    await this.cache.set(cacheKeys.preferences(String(userId)), preferences, CACHE_TTL.PREFERENCES);
   }
 
   async getPreferences(userId: number): Promise<UserPreferences | null> {
-    return this.cache.get<UserPreferences>(
-      cacheKeys.preferences(String(userId)),
-    );
+    return this.cache.get<UserPreferences>(cacheKeys.preferences(String(userId)));
   }
 
-  async updatePreferences(
-    userId: number,
-    preferences: Partial<UserPreferences>,
-  ): Promise<void> {
+  async updatePreferences(userId: number, preferences: Partial<UserPreferences>): Promise<void> {
     const existing = await this.getPreferences(userId);
 
     if (!existing) {

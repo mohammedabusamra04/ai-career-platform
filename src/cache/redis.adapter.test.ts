@@ -11,10 +11,7 @@ describe('RedisAdapter', () => {
 
     await cache.set('test:key', { name: 'Mohammed' });
 
-    expect(client.set).toHaveBeenCalledWith(
-      'test:key',
-      JSON.stringify({ name: 'Mohammed' }),
-    );
+    expect(client.set).toHaveBeenCalledWith('test:key', JSON.stringify({ name: 'Mohammed' }));
   });
 
   it('should set a value with TTL', async () => {
@@ -37,9 +34,7 @@ describe('RedisAdapter', () => {
 
   it('should get a value from Redis', async () => {
     const client = {
-      get: vi.fn().mockResolvedValue(
-        JSON.stringify({ title: 'Backend Developer' }),
-      ),
+      get: vi.fn().mockResolvedValue(JSON.stringify({ title: 'Backend Developer' })),
     };
 
     const cache = new RedisAdapter(client as never);
@@ -86,9 +81,7 @@ describe('RedisAdapter', () => {
 
     const cache = new RedisAdapter(client as never);
 
-    await expect(cache.set('test:key', 'value')).rejects.toThrow(
-      'Redis unavailable',
-    );
+    await expect(cache.set('test:key', 'value')).rejects.toThrow('Redis unavailable');
   });
 
   it('should throw when Redis GET fails', async () => {
@@ -112,8 +105,6 @@ describe('RedisAdapter', () => {
 
     const cache = new RedisAdapter(client as never);
 
-    await expect(cache.delete('test:key')).rejects.toThrow(
-      'Redis unavailable',
-    );
+    await expect(cache.delete('test:key')).rejects.toThrow('Redis unavailable');
   });
 });
