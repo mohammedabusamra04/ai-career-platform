@@ -32,6 +32,51 @@ describe('RedisAdapter', () => {
     );
   });
 
+  it('should set a value only if key does not exist', async () => {
+    const client = {
+      set: vi.fn().mockResolvedValue('OK'),
+    };
+
+    const cache = new RedisAdapter(client as never);
+
+    const result = await cache.setIfNotExists('test:key', true);
+
+    expect(result).toBe(true);
+
+    expect(client.set).toHaveBeenCalledWith('test:key', JSON.stringify(true), {
+      NX: true,
+    });
+  });
+
+  it('should return false when key already exists', async () => {
+    const client = {
+      set: vi.fn().mockResolvedValue(null),
+    };
+
+    const cache = new RedisAdapter(client as never);
+
+    const result = await cache.setIfNotExists('test:key', true);
+
+    expect(result).toBe(false);
+  });
+
+  it('should set a value with NX and TTL', async () => {
+    const client = {
+      set: vi.fn().mockResolvedValue('OK'),
+    };
+
+    const cache = new RedisAdapter(client as never);
+
+    const result = await cache.setIfNotExists('fingerprint:test', true, 86400);
+
+    expect(result).toBe(true);
+
+    expect(client.set).toHaveBeenCalledWith('fingerprint:test', JSON.stringify(true), {
+      NX: true,
+      EX: 86400,
+    });
+  });
+
   it('should get a value from Redis', async () => {
     const client = {
       get: vi.fn().mockResolvedValue(JSON.stringify({ title: 'Backend Developer' })),

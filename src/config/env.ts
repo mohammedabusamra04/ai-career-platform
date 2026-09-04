@@ -7,6 +7,7 @@ const env = {
   port: Number(process.env.PORT) || 3000,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
 };
 
 export default env;

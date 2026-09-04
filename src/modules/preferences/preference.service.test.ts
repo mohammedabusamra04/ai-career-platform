@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Cache } from '../../cache/cache.interface.js';
-
 import { PreferenceService } from './preference.service.js';
 import { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
 describe('PreferenceService', () => {
-  const createCacheMock = (): Cache => ({
+  const createCacheMock = () => ({
     set: vi.fn(),
+    setIfNotExists: vi.fn(),
     get: vi.fn(),
     delete: vi.fn(),
   });

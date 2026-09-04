@@ -50,6 +50,31 @@ export class RedisAdapter implements Cache {
       throw error;
     }
   }
+  async setIfNotExists<T>(key: string, value: T, ttl?: number): Promise<boolean> {
+    try {
+      const data = JSON.stringify(value);
+
+      const result =
+        ttl !== undefined
+          ? await this.client.set(key, data, {
+              NX: true,
+              EX: ttl,
+            })
+          : await this.client.set(key, data, {
+              NX: true,
+            });
+
+      return result === 'OK';
+    } catch (error) {
+      logger.error(
+        `❌ Redis SET NX error for key "${key}": ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`,
+      );
+
+      throw error;
+    }
+  }
 
   async delete(key: string): Promise<void> {
     try {
