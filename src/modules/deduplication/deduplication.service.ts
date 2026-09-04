@@ -19,10 +19,11 @@ export class DeduplicationService {
       const fingerprint = this.fingerprintService.generate(job);
       const key = cacheKeys.fingerprint(fingerprint);
 
-      const exists = await this.cache.get<boolean>(key);
       const existingJob = uniqueJobsByFingerprint.get(fingerprint);
 
-      if (exists || existingJob) {
+      const acquired = await this.cache.setIfNotExists(key, true, CACHE_TTL.FINGERPRINT);
+
+      if (!acquired || existingJob) {
         if (existingJob && this.scoreJob(job) > this.scoreJob(existingJob)) {
           uniqueJobsByFingerprint.set(fingerprint, job);
         }
