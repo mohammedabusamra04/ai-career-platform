@@ -6,4 +6,6 @@ export interface UserPreferences {
   experienceLevel: ExperienceLevel;
   location?: string;
   skills?: string[];
+  timezone: string;
+  notificationTimes: string[];
 }
