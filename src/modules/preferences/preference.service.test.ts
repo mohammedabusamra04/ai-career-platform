@@ -29,6 +29,8 @@ describe('PreferenceService', () => {
       experienceLevel: ExperienceLevel.JUNIOR,
       location: 'Gaza',
       skills: ['Node.js', 'TypeScript', 'Redis'],
+      timezone: 'Asia/Gaza',
+      notificationTimes: ['09:00', '21:00'],
     });
   });
 
@@ -79,6 +81,8 @@ describe('PreferenceService', () => {
       jobTitle: 'Backend Developer',
       workType: WorkType.REMOTE,
       experienceLevel: ExperienceLevel.JUNIOR,
+      timezone: 'Asia/Gaza',
+      notificationTimes: ['09:00', '21:00'],
     };
 
     await service.savePreferences(123, preferences);
