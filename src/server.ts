@@ -2,6 +2,7 @@ import app from './app.js';
 import { bot } from './bot/bot.js';
 import { connectRedis } from './config/redis.js';
 import env from './config/env.js';
+import { jobNotificationScheduler } from './config/services.js';
 import logger from './shared/utils/logger.js';
 
 app.listen(env.port, () => {
@@ -9,6 +10,8 @@ app.listen(env.port, () => {
 });
 
 await connectRedis();
+
+jobNotificationScheduler.start();
 
 bot
   .start({
