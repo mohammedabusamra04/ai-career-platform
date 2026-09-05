@@ -15,6 +15,8 @@ const preferences: UserPreferences = {
   experienceLevel: ExperienceLevel.JUNIOR,
   location: 'Palestine',
   skills: ['Node.js', 'TypeScript'],
+  timezone: 'Asia/Gaza',
+  notificationTimes: ['09:00', '21:00'],
 };
 
 const createJob = (title: string): Job => ({
