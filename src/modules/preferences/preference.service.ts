@@ -48,6 +48,8 @@ export class PreferenceService {
       experienceLevel: input.experienceLevel as ExperienceLevel,
       location: input.location ? normalizeLocation(input.location) : undefined,
       skills: input.skills ? normalizeSkills(input.skills) : undefined,
+      timezone: 'Asia/Gaza',
+      notificationTimes: ['09:00', '21:00'],
     };
   }
 
