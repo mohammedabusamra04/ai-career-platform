@@ -15,6 +15,9 @@ import {
   validateJobTitle,
 } from '../../modules/preferences/preference.validator.js';
 
+import { preferenceService } from '../../modules/preferences/preference.service.js';
+import { subscriptionService } from '../../modules/subscriptions/subscription.service.js';
+
 export function registerPreferencesHandler(bot: Bot<BotContext>): void {
   bot.on('message:text', async (ctx) => {
     switch (ctx.session.step) {
@@ -153,9 +156,45 @@ export function registerPreferencesHandler(bot: Bot<BotContext>): void {
       return;
     }
 
+    const userId = ctx.from?.id;
+
+    if (!userId) {
+      await ctx.answerCallbackQuery({
+        text: '❌ Unable to identify your Telegram account.',
+        show_alert: true,
+      });
+
+      return;
+    }
+
+    const preferences = ctx.session.preferences;
+
+    if (!preferences.jobTitle || !preferences.workType || !preferences.experienceLevel) {
+      await ctx.answerCallbackQuery({
+        text: '❌ Please complete all required preferences.',
+        show_alert: true,
+      });
+
+      return;
+    }
+
+    const savedPreferences = preferenceService.createPreferences({
+      jobTitle: preferences.jobTitle,
+      workType: preferences.workType,
+      experienceLevel: preferences.experienceLevel,
+      location: preferences.location,
+      skills: preferences.skills?.join(','),
+    });
+
+    await preferenceService.savePreferences(userId, savedPreferences);
+    await subscriptionService.subscribe(userId);
+
     await ctx.answerCallbackQuery();
 
-    await ctx.reply('✅ Your job preferences have been saved successfully!');
+    await ctx.reply(
+      '✅ Your preferences have been saved successfully!\n\n' +
+        '🔔 You are now subscribed to job notifications.',
+    );
   });
 
   bot.callbackQuery('preferences:restart', async (ctx) => {
