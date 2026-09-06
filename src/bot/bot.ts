@@ -9,6 +9,7 @@ import type { PreferenceSession } from './session.js';
 import { registerPreferencesHandler } from './handlers/preferences.handler.js';
 import { registerStartHandler } from './handlers/start.handler.js';
 import { deduplicateMiddleware } from './middleware/deduplicate.middleware.js';
+import { registerSubscriptionHandler } from './handlers/subscription.handler.js';
 
 if (!env.telegramBotToken) {
   throw new Error('TELEGRAM_BOT_TOKEN is not configured');
@@ -31,6 +32,7 @@ bot.use(
 
 registerStartHandler(bot);
 registerPreferencesHandler(bot);
+registerSubscriptionHandler(bot);
 
 bot.catch((error) => {
   logger.error(`Telegram bot error: ${error.message}`);
