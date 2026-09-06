@@ -31,6 +31,7 @@ describe('JobNotificationService', () => {
 
     const subscriptionService = {
       getSubscribedUsers: vi.fn(),
+      isSubscribed: vi.fn().mockResolvedValue(true),
     };
 
     const preferenceService = {
@@ -241,5 +242,24 @@ describe('JobNotificationService', () => {
     await service.run();
 
     expect(notificationService.sendJobs).toHaveBeenCalledWith(202, matchedJobs);
+  });
+  it('should not notify an unsubscribed user', async () => {
+    const {
+      service,
+      subscriptionService,
+      preferenceService,
+      jobCollectionService,
+      matchingService,
+      notificationService,
+    } = createService();
+
+    vi.mocked(subscriptionService.isSubscribed).mockResolvedValue(false);
+
+    await service.runForUser(101);
+
+    expect(preferenceService.getPreferences).not.toHaveBeenCalled();
+    expect(jobCollectionService.collectJobs).not.toHaveBeenCalled();
+    expect(matchingService.matchJobs).not.toHaveBeenCalled();
+    expect(notificationService.sendJobs).not.toHaveBeenCalled();
   });
 });
