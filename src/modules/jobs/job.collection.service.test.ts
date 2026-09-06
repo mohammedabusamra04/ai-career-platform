@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ms from 'ms';
 
 import { JobCollectionService } from './job.collection.service.js';
@@ -8,19 +8,6 @@ import { WorkType, ExperienceLevel } from '../../shared/types/job.js';
 import type { JobSource } from './sources/job-source.interface.js';
 
 describe('JobCollectionService', () => {
-  const deduplicationService = {
-    deduplicate: vi.fn(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-
-    deduplicationService.deduplicate.mockImplementation(async (jobs) => ({
-      uniqueJobs: jobs,
-      duplicateJobs: [],
-    }));
-  });
-
   it('should collect valid recent jobs', async () => {
     const source: JobSource = {
       type: JobSourceType.BAEED,
@@ -40,8 +27,7 @@ describe('JobCollectionService', () => {
     };
 
     const sourceManager = new JobSourceManager([source]);
-
-    const service = new JobCollectionService(sourceManager, deduplicationService);
+    const service = new JobCollectionService(sourceManager);
 
     const jobs = await service.collectJobs({
       jobTitle: 'Backend Developer',
@@ -68,8 +54,7 @@ describe('JobCollectionService', () => {
     };
 
     const sourceManager = new JobSourceManager([source]);
-
-    const service = new JobCollectionService(sourceManager, deduplicationService);
+    const service = new JobCollectionService(sourceManager);
 
     const jobs = await service.collectJobs({
       jobTitle: 'Backend Developer',
@@ -95,48 +80,12 @@ describe('JobCollectionService', () => {
     };
 
     const sourceManager = new JobSourceManager([source]);
-
-    const service = new JobCollectionService(sourceManager, deduplicationService);
-
-    const jobs = await service.collectJobs({
-      jobTitle: 'Backend Developer',
-    });
-
-    expect(jobs).toHaveLength(0);
-  });
-
-  it('should return only unique jobs after deduplication', async () => {
-    const job = {
-      title: 'Backend Developer',
-      company: 'Test Company',
-      source: JobSourceType.BAEED,
-      applicationUrl: 'https://example.com/job',
-      workType: WorkType.REMOTE,
-      experienceLevel: ExperienceLevel.JUNIOR,
-      skills: ['Node.js'],
-      publicationDate: new Date(),
-      scrapedAt: new Date(),
-    };
-
-    const source: JobSource = {
-      type: JobSourceType.BAEED,
-      fetchJobs: vi.fn().mockResolvedValue([job]),
-    };
-
-    const sourceManager = new JobSourceManager([source]);
-
-    deduplicationService.deduplicate.mockResolvedValue({
-      uniqueJobs: [],
-      duplicateJobs: [job],
-    });
-
-    const service = new JobCollectionService(sourceManager, deduplicationService);
+    const service = new JobCollectionService(sourceManager);
 
     const jobs = await service.collectJobs({
       jobTitle: 'Backend Developer',
     });
 
     expect(jobs).toHaveLength(0);
-    expect(deduplicationService.deduplicate).toHaveBeenCalledWith([job]);
   });
 });
