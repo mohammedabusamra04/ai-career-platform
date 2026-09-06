@@ -2,7 +2,8 @@ import { NotificationScheduleService } from './notification.schedule.js';
 
 import type { UserPreferences } from '../preferences/preference.types.js';
 import logger from '../../shared/utils/logger.js';
-interface NotificationRunner {
+
+interface JobPipelineRunner {
   run(): Promise<void>;
   runForUser(userId: number): Promise<void>;
 }
@@ -20,7 +21,7 @@ export class JobNotificationScheduler {
   private isRunning = false;
 
   constructor(
-    private readonly notificationService: NotificationRunner,
+    private readonly pipelineService: JobPipelineRunner,
     private readonly scheduleService: NotificationScheduleService,
     private readonly subscriptionService: SubscriptionReader,
     private readonly preferenceService: PreferenceReader,
@@ -60,7 +61,7 @@ export class JobNotificationScheduler {
         continue;
       }
 
-      await this.notificationService.runForUser(userId);
+      await this.pipelineService.runForUser(userId);
     }
   }
 
@@ -115,6 +116,7 @@ export class JobNotificationScheduler {
           }`,
         );
       }
+
       if (this.isRunning) {
         await this.scheduleNextRun();
       }

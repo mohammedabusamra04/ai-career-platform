@@ -14,7 +14,7 @@ describe('JobNotificationScheduler', () => {
     // 09:00 Asia/Gaza = 06:00 UTC
     vi.setSystemTime(new Date('2026-09-05T05:59:59.000Z'));
 
-    const notificationService = {
+    const pipelineService = {
       run: vi.fn().mockResolvedValue(undefined),
       runForUser: vi.fn().mockResolvedValue(undefined),
     };
@@ -36,7 +36,7 @@ describe('JobNotificationScheduler', () => {
     };
 
     const scheduler = new JobNotificationScheduler(
-      notificationService,
+      pipelineService,
       scheduleService,
       subscriptionService,
       preferenceService,
@@ -46,8 +46,8 @@ describe('JobNotificationScheduler', () => {
 
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(notificationService.runForUser).toHaveBeenCalledWith(1);
-    expect(notificationService.runForUser).toHaveBeenCalledTimes(1);
+    expect(pipelineService.runForUser).toHaveBeenCalledWith(1);
+    expect(pipelineService.runForUser).toHaveBeenCalledTimes(1);
 
     scheduler.stop();
   });
@@ -57,7 +57,7 @@ describe('JobNotificationScheduler', () => {
 
     vi.setSystemTime(new Date('2026-09-05T05:00:00.000Z'));
 
-    const notificationService = {
+    const pipelineService = {
       run: vi.fn().mockResolvedValue(undefined),
       runForUser: vi.fn().mockResolvedValue(undefined),
     };
@@ -79,7 +79,7 @@ describe('JobNotificationScheduler', () => {
     };
 
     const scheduler = new JobNotificationScheduler(
-      notificationService,
+      pipelineService,
       scheduleService,
       subscriptionService,
       preferenceService,
@@ -91,7 +91,7 @@ describe('JobNotificationScheduler', () => {
     // Advance to 09:00 Asia/Gaza = 06:00 UTC.
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
 
-    expect(notificationService.runForUser).toHaveBeenCalledTimes(1);
+    expect(pipelineService.runForUser).toHaveBeenCalledTimes(1);
 
     scheduler.stop();
   });
@@ -101,7 +101,7 @@ describe('JobNotificationScheduler', () => {
 
     vi.setSystemTime(new Date('2026-09-05T05:00:00.000Z'));
 
-    const notificationService = {
+    const pipelineService = {
       run: vi.fn().mockResolvedValue(undefined),
       runForUser: vi.fn().mockResolvedValue(undefined),
     };
@@ -123,7 +123,7 @@ describe('JobNotificationScheduler', () => {
     };
 
     const scheduler = new JobNotificationScheduler(
-      notificationService,
+      pipelineService,
       scheduleService,
       subscriptionService,
       preferenceService,
@@ -134,7 +134,7 @@ describe('JobNotificationScheduler', () => {
 
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000 + 1);
 
-    expect(notificationService.runForUser).not.toHaveBeenCalled();
+    expect(pipelineService.runForUser).not.toHaveBeenCalled();
 
     scheduler.stop();
   });
@@ -144,7 +144,7 @@ describe('JobNotificationScheduler', () => {
 
     vi.setSystemTime(new Date('2026-09-05T05:59:59.000Z'));
 
-    const notificationService = {
+    const pipelineService = {
       run: vi.fn().mockResolvedValue(undefined),
       runForUser: vi.fn().mockResolvedValue(undefined),
     };
@@ -160,7 +160,7 @@ describe('JobNotificationScheduler', () => {
     };
 
     const scheduler = new JobNotificationScheduler(
-      notificationService,
+      pipelineService,
       scheduleService,
       subscriptionService,
       preferenceService,
@@ -170,7 +170,7 @@ describe('JobNotificationScheduler', () => {
 
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(notificationService.runForUser).not.toHaveBeenCalled();
+    expect(pipelineService.runForUser).not.toHaveBeenCalled();
 
     scheduler.stop();
   });
@@ -180,7 +180,7 @@ describe('JobNotificationScheduler', () => {
 
     vi.setSystemTime(new Date('2026-09-05T05:00:00.000Z'));
 
-    const notificationService = {
+    const pipelineService = {
       run: vi.fn().mockResolvedValue(undefined),
       runForUser: vi.fn().mockResolvedValue(undefined),
     };
@@ -214,7 +214,7 @@ describe('JobNotificationScheduler', () => {
     };
 
     const scheduler = new JobNotificationScheduler(
-      notificationService,
+      pipelineService,
       scheduleService,
       subscriptionService,
       preferenceService,
@@ -228,8 +228,8 @@ describe('JobNotificationScheduler', () => {
     // At 05:00 UTC, Gaza is the earliest notification.
     await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
 
-    expect(notificationService.runForUser).toHaveBeenCalledWith(1);
-    expect(notificationService.runForUser).toHaveBeenCalledTimes(1);
+    expect(pipelineService.runForUser).toHaveBeenCalledWith(1);
+    expect(pipelineService.runForUser).toHaveBeenCalledTimes(1);
 
     scheduler.stop();
   });
