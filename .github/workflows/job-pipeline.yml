@@ -46,7 +46,13 @@ jobs:
           PIPELINE_API_URL: ${{ secrets.PIPELINE_API_URL }}
           PIPELINE_API_SECRET: ${{ secrets.PIPELINE_API_SECRET }}
         run: |
-          ENDPOINT="${PIPELINE_API_URL%/}/jobs/pipeline/run"
+          BASE_URL="${PIPELINE_API_URL%/}"
+
+          if [[ "$BASE_URL" == */run ]]; then
+            ENDPOINT="$BASE_URL"
+          else
+            ENDPOINT="$BASE_URL/jobs/pipeline/run"
+          fi
           echo "Sending POST request to: $ENDPOINT"
 
           # Perform POST request, capturing response body and HTTP status code
