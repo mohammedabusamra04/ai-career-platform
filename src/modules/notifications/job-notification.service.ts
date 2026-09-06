@@ -8,6 +8,7 @@ interface JobCollector {
 
 interface SubscriptionReader {
   getSubscribedUsers(): Promise<number[]>;
+  isSubscribed(userId: number): Promise<boolean>;
 }
 
 interface PreferenceReader {
@@ -41,6 +42,11 @@ export class JobNotificationService {
 
   async runForUser(userId: number): Promise<void> {
     try {
+      const isSubscribed = await this.subscriptionService.isSubscribed(userId);
+
+      if (!isSubscribed) {
+        return;
+      }
       const preferences = await this.preferenceService.getPreferences(userId);
 
       if (!preferences) {
