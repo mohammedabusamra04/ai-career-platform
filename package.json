@@ -8,6 +8,7 @@
     "watch": "tsc -w --preserveWatchOutput",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
