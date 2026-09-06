@@ -1,12 +1,15 @@
 import express from 'express';
 import { errorHandler } from './shared/middleware/error.middleware.js';
 import { responseFormatter } from './shared/middleware/response.middleware.js';
+import jobPipelineRouter from './modules/jobs/job.pipeline.route.js';
 
 const app = express();
 
 app.use(express.json());
 
 app.use(responseFormatter);
+
+app.use('/jobs/pipeline', jobPipelineRouter);
 
 app.get('/', (_req, res) => {
   res.success({
