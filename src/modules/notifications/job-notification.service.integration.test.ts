@@ -42,6 +42,7 @@ describe('JobNotificationService integration', () => {
 
     const subscriptionService = {
       getSubscribedUsers: vi.fn().mockResolvedValue([123]),
+      isSubscribed: vi.fn().mockResolvedValue(true),
     };
 
     const preferenceService = {
