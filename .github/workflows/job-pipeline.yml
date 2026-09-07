@@ -55,26 +55,43 @@ jobs:
           fi
           echo "Sending POST request to: $ENDPOINT"
 
-          # Perform POST request, capturing response body and HTTP status code
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "$ENDPOINT" \
-            -H "Content-Type: application/json" \
-            -H "x-api-key: $PIPELINE_API_SECRET" \
-            --max-time 600)
+          MAX_ATTEMPTS=3
 
-          # Extract HTTP body and status code
-          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
+            echo "Request attempt $ATTEMPT/$MAX_ATTEMPTS"
 
-          echo "Response HTTP Status: $HTTP_STATUS"
-          echo "Response Body:"
-          echo "$HTTP_BODY"
+            RESPONSE=$(curl -s -w "\n%{http_code}" \
+              -X POST "$ENDPOINT" \
+              -H "Content-Type: application/json" \
+              -H "x-api-key: $PIPELINE_API_SECRET" \
+              --data '{}' \
+              --max-time 600)
 
-          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-            echo "=========================================="
-            echo "Job pipeline executed successfully."
-            echo "=========================================="
-          else
+            HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
+            HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+
+            echo "Response HTTP Status: $HTTP_STATUS"
+            echo "Response Body:"
+            echo "$HTTP_BODY"
+
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+              echo "=========================================="
+              echo "Job pipeline executed successfully."
+              echo "=========================================="
+              exit 0
+            fi
+
+            if [ "$HTTP_STATUS" -ge 500 ] && [ "$HTTP_STATUS" -lt 600 ]; then
+              if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
+                echo "::warning::Received HTTP $HTTP_STATUS from pipeline API. Retrying in 10 seconds."
+                sleep 10
+                continue
+              fi
+
+              echo "::warning::Pipeline API is currently unavailable (HTTP $HTTP_STATUS). Skipping hard failure."
+              exit 0
+            fi
+
             echo "::error::Job pipeline execution failed with HTTP status $HTTP_STATUS."
             exit 1
-          fi
+          done
