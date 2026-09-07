@@ -60,6 +60,7 @@ jobs:
             -X POST "$ENDPOINT" \
             -H "Content-Type: application/json" \
             -H "x-api-key: $PIPELINE_API_SECRET" \
+            --data '{}' \
             --max-time 600)
 
           # Extract HTTP body and status code
