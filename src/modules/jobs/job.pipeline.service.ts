@@ -1,6 +1,7 @@
 import type { Cache } from '../../cache/cache.interface.js';
 import { cacheKeys } from '../../cache/cache.keys.js';
 import { CACHE_TTL } from '../../cache/cache.ttl.js';
+import logger from '../../shared/utils/logger.js';
 
 import type { Job, JobSearchQuery } from './job.types.js';
 import type { MatchedJob } from '../matching/matching.service.js';
@@ -54,6 +55,7 @@ export class JobPipelineService {
 
   async run(): Promise<void> {
     const subscribers = await this.subscriptionService.getSubscribedUsers();
+    logger.info(`Job pipeline started. Found ${subscribers.length} subscribed users.`);
 
     for (const userId of subscribers) {
       await this.runForUser(userId);
@@ -65,12 +67,14 @@ export class JobPipelineService {
       const isSubscribed = await this.subscriptionService.isSubscribed(userId);
 
       if (!isSubscribed) {
+        logger.info(`User ${userId} is not subscribed. Skipping.`);
         return;
       }
 
       const preferences = await this.preferenceService.getPreferences(userId);
 
       if (!preferences) {
+        logger.info(`User ${userId} has no saved preferences. Skipping.`);
         return;
       }
 
@@ -83,12 +87,14 @@ export class JobPipelineService {
       });
 
       if (jobs.length === 0) {
+        logger.info(`No jobs collected for user ${userId}.`);
         return;
       }
 
       const { uniqueJobs } = await this.deduplicationService.deduplicate(jobs);
 
       if (uniqueJobs.length === 0) {
+        logger.info(`All ${jobs.length} collected jobs are duplicates for user ${userId}.`);
         return;
       }
 
@@ -101,9 +107,13 @@ export class JobPipelineService {
       );
 
       if (qualityMatches.length === 0) {
+        logger.info(
+          `No matches met the minimum score (${MINIMUM_MATCH_SCORE}) for user ${userId}.`,
+        );
         return;
       }
 
+      logger.info(`Sending ${qualityMatches.length} matched jobs to user ${userId}.`);
       await this.notificationService.sendJobs(userId, qualityMatches);
     } catch (error) {
       console.error(`Failed to process job pipeline for user ${userId}:`, error);
