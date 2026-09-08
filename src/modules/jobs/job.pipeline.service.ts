@@ -87,14 +87,18 @@ export class JobPipelineService {
       });
 
       if (jobs.length === 0) {
-        logger.info(`No jobs collected for user ${userId}.`);
+        logger.info(`No jobs collected for user ${userId}. Sending no-match notification.`);
+        await this.notificationService.sendJobs(userId, []);
         return;
       }
 
       const { uniqueJobs } = await this.deduplicationService.deduplicate(jobs);
 
       if (uniqueJobs.length === 0) {
-        logger.info(`All ${jobs.length} collected jobs are duplicates for user ${userId}.`);
+        logger.info(
+          `All ${jobs.length} collected jobs are duplicates for user ${userId}. Sending no-match notification.`,
+        );
+        await this.notificationService.sendJobs(userId, []);
         return;
       }
 
@@ -108,8 +112,9 @@ export class JobPipelineService {
 
       if (qualityMatches.length === 0) {
         logger.info(
-          `No matches met the minimum score (${MINIMUM_MATCH_SCORE}) for user ${userId}.`,
+          `No matches met the minimum score (${MINIMUM_MATCH_SCORE}) for user ${userId}. Sending no-match notification.`,
         );
+        await this.notificationService.sendJobs(userId, []);
         return;
       }
 

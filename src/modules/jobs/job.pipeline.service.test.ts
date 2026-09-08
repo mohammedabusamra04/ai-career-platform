@@ -229,7 +229,7 @@ describe('JobPipelineService', () => {
 
     expect(deduplicationService.deduplicate).not.toHaveBeenCalled();
     expect(matchingService.matchJobs).not.toHaveBeenCalled();
-    expect(notificationService.sendJobs).not.toHaveBeenCalled();
+    expect(notificationService.sendJobs).toHaveBeenCalledWith(123, []);
   });
 
   it('should stop processing when all jobs are duplicates', async () => {
@@ -257,10 +257,10 @@ describe('JobPipelineService', () => {
     expect(deduplicationService.deduplicate).toHaveBeenCalledWith([testJob]);
 
     expect(matchingService.matchJobs).not.toHaveBeenCalled();
-    expect(notificationService.sendJobs).not.toHaveBeenCalled();
+    expect(notificationService.sendJobs).toHaveBeenCalledWith(123, []);
   });
 
-  it('should not notify when all matches are below the minimum score', async () => {
+  it('should notify no-match when all matches are below the minimum score', async () => {
     const {
       service,
       subscriptionService,
@@ -297,7 +297,7 @@ describe('JobPipelineService', () => {
 
     expect(matchingService.matchJobs).toHaveBeenCalledWith([testJob], preferences);
 
-    expect(notificationService.sendJobs).not.toHaveBeenCalled();
+    expect(notificationService.sendJobs).toHaveBeenCalledWith(123, []);
   });
 
   it('should notify only jobs that meet the minimum match score', async () => {
@@ -396,7 +396,7 @@ describe('JobPipelineService', () => {
     ]);
   });
 
-  it('should not notify when there are no quality matches', async () => {
+  it('should notify no-match when there are no quality matches', async () => {
     const {
       service,
       subscriptionService,
@@ -425,6 +425,6 @@ describe('JobPipelineService', () => {
 
     await service.runForUser(123);
 
-    expect(notificationService.sendJobs).not.toHaveBeenCalled();
+    expect(notificationService.sendJobs).toHaveBeenCalledWith(123, []);
   });
 });
