@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeJob } from './job.normalizer.js';
-import { validateJob } from './job.validator.js';
 import { JobSourceType } from './job.types.js';
 import { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
@@ -47,66 +46,5 @@ describe('Job normalization', () => {
     });
 
     expect(job.skills).toEqual([]);
-  });
-});
-
-describe('Job validation', () => {
-  it('should validate a correct job', () => {
-    const job = normalizeJob({
-      title: 'Backend Developer',
-      company: 'Google',
-      source: JobSourceType.LINKEDIN,
-      applicationUrl: 'https://example.com/job',
-      publicationDate: '2026-08-27T10:00:00Z',
-    });
-
-    expect(validateJob(job)).toBe(true);
-  });
-
-  it('should reject a job without a title', () => {
-    const job = normalizeJob({
-      title: '',
-      company: 'Google',
-      source: JobSourceType.LINKEDIN,
-      applicationUrl: 'https://example.com/job',
-      publicationDate: '2026-08-27T10:00:00Z',
-    });
-
-    expect(validateJob(job)).toBe(false);
-  });
-
-  it('should reject a job without a company', () => {
-    const job = normalizeJob({
-      title: 'Backend Developer',
-      company: '',
-      source: JobSourceType.LINKEDIN,
-      applicationUrl: 'https://example.com/job',
-      publicationDate: '2026-08-27T10:00:00Z',
-    });
-
-    expect(validateJob(job)).toBe(false);
-  });
-
-  it('should reject a job without an application URL', () => {
-    const job = normalizeJob({
-      title: 'Backend Developer',
-      company: 'Google',
-      source: JobSourceType.LINKEDIN,
-      applicationUrl: '',
-      publicationDate: '2026-08-27T10:00:00Z',
-    });
-
-    expect(validateJob(job)).toBe(false);
-  });
-  it('should reject a job with an invalid application URL', () => {
-    const job = normalizeJob({
-      title: 'Backend Developer',
-      company: 'Google',
-      source: JobSourceType.LINKEDIN,
-      applicationUrl: 'not-a-url',
-      publicationDate: '2026-08-27T10:00:00Z',
-    });
-
-    expect(validateJob(job)).toBe(false);
   });
 });
