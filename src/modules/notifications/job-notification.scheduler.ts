@@ -4,8 +4,8 @@ import type { UserPreferences } from '../preferences/preference.types.js';
 import logger from '../../shared/utils/logger.js';
 
 interface JobPipelineRunner {
-  run(): Promise<void>;
-  runForUser(userId: number): Promise<void>;
+  run(): Promise<unknown>;
+  runForUser(userId: number): Promise<unknown>;
 }
 
 interface SubscriptionReader {

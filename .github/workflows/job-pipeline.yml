@@ -1,80 +1,31 @@
-name: Automated Job Processing Pipeline
+name: Daily Job Agent
 
 on:
   schedule:
-    # 7:00 AM and 7:00 PM Asia/Gaza (UTC+3 summer time)
-    # Adjust to 0 5 / 0 17 when daylight saving ends (UTC+2)
-    - cron: '0 4 * * *'
-    - cron: '0 16 * * *'
-  # Allow manual trigger from GitHub Actions tab
-  workflow_dispatch:
+    
+    
+    - cron: '0 7 * * *'   
+    - cron: '0 19 * * *'  
+  workflow_dispatch: {}
 
 jobs:
-  run-job-pipeline:
-    name: Trigger Job Pipeline
+  run-agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 20
     steps:
-      - name: Log Execution Details
-        run: |
-          echo "=========================================="
-          echo "Triggering AI Career Platform Job Pipeline"
-          echo "Trigger Event: ${{ github.event_name }}"
-          echo "Execution Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "=========================================="
+      - uses: actions/checkout@v4
 
-      - name: Validate Configuration Secrets
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run job pipeline
         env:
-          PIPELINE_API_URL: ${{ secrets.PIPELINE_API_URL }}
-          PIPELINE_API_SECRET: ${{ secrets.PIPELINE_API_SECRET }}
-        run: |
-          if [ -z "$PIPELINE_API_URL" ]; then
-            echo "::error::Secret PIPELINE_API_URL is missing. Please configure it in repository secrets."
-            exit 1
-          fi
-
-          if [ -z "$PIPELINE_API_SECRET" ]; then
-            echo "::error::Secret PIPELINE_API_SECRET is missing. Please configure it in repository secrets."
-            exit 1
-          fi
-
-          echo "Secrets validation succeeded."
-
-      - name: Trigger Backend Pipeline
-        env:
-          PIPELINE_API_URL: ${{ secrets.PIPELINE_API_URL }}
-          PIPELINE_API_SECRET: ${{ secrets.PIPELINE_API_SECRET }}
-        run: |
-          BASE_URL="${PIPELINE_API_URL%/}"
-
-          if [[ "$BASE_URL" == */run ]]; then
-            ENDPOINT="$BASE_URL"
-          else
-            ENDPOINT="$BASE_URL/jobs/pipeline/run"
-          fi
-          echo "Sending POST request to: $ENDPOINT"
-
-          # Perform POST request, capturing response body and HTTP status code
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "$ENDPOINT" \
-            -H "Content-Type: application/json" \
-            -H "x-api-key: $PIPELINE_API_SECRET" \
-            --max-time 600)
-
-          # Extract HTTP body and status code
-          HTTP_BODY=$(echo "$RESPONSE" | sed '$d')
-          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-
-          echo "Response HTTP Status: $HTTP_STATUS"
-          echo "Response Body:"
-          echo "$HTTP_BODY"
-
-          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
-            echo "=========================================="
-            echo "Job pipeline executed successfully."
-            echo "=========================================="
-          else
-            echo "::error::Job pipeline execution failed with HTTP status $HTTP_STATUS."
-            exit 1
-          fi
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: npx tsx src/scripts/run-pipeline.ts

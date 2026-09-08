@@ -8,6 +8,7 @@
     "watch": "tsc -w --preserveWatchOutput",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "pipeline:run": "tsx src/scripts/run-pipeline.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
