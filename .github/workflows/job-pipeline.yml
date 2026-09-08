@@ -2,10 +2,10 @@ name: Automated Job Processing Pipeline
 
 on:
   schedule:
-    # First daily execution at 04:30 Gaza time (01:30 UTC)
-    - cron: '30 1 * * *'
-    # Second daily execution at 16:30 Gaza time (13:30 UTC)
-    - cron: '30 13 * * *'
+    # First daily execution at 04:30 Gaza time (02:10 UTC)
+    - cron: '10 2 * * *'
+    # Second daily execution at 16:30 Gaza time (14:10 UTC)
+    - cron: '10 16 * * *'
   # Allow manual trigger from GitHub Actions tab
   workflow_dispatch:
 
