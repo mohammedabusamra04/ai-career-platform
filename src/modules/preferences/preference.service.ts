@@ -49,7 +49,7 @@ export class PreferenceService {
       location: input.location ? normalizeLocation(input.location) : undefined,
       skills: input.skills ? normalizeSkills(input.skills) : undefined,
       timezone: 'Asia/Gaza',
-      notificationTimes: ['04:30', '16:30'],
+      notificationTimes: ['07:00', '19:00'],
     };
   }
 

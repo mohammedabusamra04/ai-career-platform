@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobSourceType } from '../../jobs/job.types.js';
 import type { Job } from '../../jobs/job.types.js';
@@ -21,6 +21,11 @@ vi.mock('@google/genai', () => ({
     };
   },
 }));
+
+beforeEach(() => {
+  generateContentMock.mockReset();
+  vi.useRealTimers();
+});
 
 const preferences: UserPreferences = {
   jobTitle: 'Backend Developer',
@@ -148,5 +153,54 @@ describe('GeminiProvider', () => {
         preferences,
       }),
     ).rejects.toThrow(AIProviderError);
+  });
+
+  it('should retry on transient Gemini errors then succeed', async () => {
+    vi.useFakeTimers();
+
+    const transientError = Object.assign(new Error('Overloaded'), { status: 503 });
+
+    generateContentMock
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({
+          score: 85,
+          reason: 'Good match after retry',
+        }),
+      });
+
+    const provider = new GeminiProvider();
+
+    const matchPromise = provider.match({
+      job,
+      preferences,
+    });
+
+    await vi.runAllTimersAsync();
+    const result = await matchPromise;
+
+    expect(result).toEqual({
+      score: 85,
+      reason: 'Good match after retry',
+    });
+    expect(generateContentMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('should parse JSON wrapped in markdown fences', async () => {
+    generateContentMock.mockResolvedValue({
+      text: '```json\n{"score": 70, "reason": "Partial match"}\n```',
+    });
+
+    const provider = new GeminiProvider();
+
+    const result = await provider.match({
+      job,
+      preferences,
+    });
+
+    expect(result).toEqual({
+      score: 70,
+      reason: 'Partial match',
+    });
   });
 });

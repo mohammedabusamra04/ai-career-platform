@@ -30,7 +30,7 @@ describe('PreferenceService', () => {
       location: 'Gaza',
       skills: ['Node.js', 'TypeScript', 'Redis'],
       timezone: 'Asia/Gaza',
-      notificationTimes: ['04:30', '16:30'],
+      notificationTimes: ['07:00', '19:00'],
     });
   });
 

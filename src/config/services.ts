@@ -14,6 +14,8 @@ import {
   WeWorkRemotelyJobSource,
   MostaqlJobSource,
   BaytJobSource,
+  WuzzufJobSource,
+  ForasnaJobSource,
   LinkedinJobSource,
 } from '../modules/jobs/sources/index.js';
 import type { JobSource } from '../modules/jobs/sources/job-source.interface.js';
@@ -45,6 +47,8 @@ const activeJobSources: JobSource[] = [
   new WeWorkRemotelyJobSource(),
   new MostaqlJobSource(),
   new BaytJobSource(),
+  new WuzzufJobSource(),
+  new ForasnaJobSource(),
   ...(env.rapidApiKey ? [new LinkedinJobSource(env.rapidApiKey)] : []),
 ];
 

@@ -6,15 +6,14 @@ import type { JobSource } from './job-source.interface.js';
 import { ExperienceLevel, WorkType } from '../../../shared/types/job.js';
 
 /**
- * Scrapes Mostaql freelance projects.
- * Selectors adapted from Daily_Jobs_Bot tools/mostaqlJobs.js.
+ * Scrapes Wuzzuf search results.
+ * Selectors adapted from Daily_Jobs_Bot tools/wuzzufJobs.js.
  */
-export class MostaqlJobSource implements JobSource {
-  public readonly type = JobSourceType.MOSTAQEL;
+export class WuzzufJobSource implements JobSource {
+  public readonly type = JobSourceType.WUZZUF;
 
   async fetchJobs(query: JobSearchQuery): Promise<Job[]> {
-    const searchKeyword = query.jobTitle.trim();
-    const url = `https://mostaql.com/projects?filter[query]=${encodeURIComponent(searchKeyword)}`;
+    const url = `https://wuzzuf.net/search/jobs/?q=${encodeURIComponent(query.jobTitle.trim())}`;
 
     try {
       const response = await fetch(url, {
@@ -30,35 +29,36 @@ export class MostaqlJobSource implements JobSource {
       }
 
       const html = await response.text();
-      return this.parseProjects(html, query);
+      return this.parseJobs(html, query);
     } catch {
       return [];
     }
   }
 
-  private parseProjects(html: string, query: JobSearchQuery): Job[] {
+  private parseJobs(html: string, query: JobSearchQuery): Job[] {
     const $ = cheerio.load(html);
     const jobs: Job[] = [];
 
-    $('.project-card, .project-row, li.media').each((_, el) => {
+    $('div.css-1gatmva, div[class*="job"], .css-1lh32fc').each((_, el) => {
       if (jobs.length >= 15) {
         return;
       }
 
-      const titleEl = $(el).find('h2 a, .project-title a, a.o-card__title, h2.card--title a').first();
+      const titleEl = $(el).find('h2 a, a.css-o171kl, a[class*="title"]').first();
       const title = titleEl.text().trim();
       let link = titleEl.attr('href');
       if (link && !link.startsWith('http')) {
-        link = `https://mostaql.com${link}`;
+        link = `https://wuzzuf.net${link}`;
       }
 
-      const description =
-        $(el)
-          .find('.project-brief, .project__brief, .o-card__description, .card--desc, p')
-          .first()
-          .text()
-          .trim()
-          .slice(0, 400) || title;
+      const company =
+        $(el).find('a.css-ipsyv7, a[class*="company"], .css-d7j1kk').first().text().trim() ||
+        'Wuzzuf Employer';
+
+      const location =
+        $(el).find('span.css-5wys0k, span[class*="location"]').first().text().trim() ||
+        query.location ||
+        'Egypt';
 
       if (!title || !link) {
         return;
@@ -66,14 +66,14 @@ export class MostaqlJobSource implements JobSource {
 
       jobs.push({
         title,
-        company: 'مستقل (مشروع فريلانس)',
-        source: JobSourceType.MOSTAQEL,
+        company,
+        source: JobSourceType.WUZZUF,
         applicationUrl: link,
-        location: 'عن بعد (Freelance)',
-        country: 'الشرق الأوسط / عن بعد',
-        workType: WorkType.REMOTE,
+        location,
+        country: location,
+        workType: query.workType || WorkType.ON_SITE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
-        description,
+        description: `${title} at ${company} in ${location}`,
         skills: query.skills || [],
         publicationDate: new Date(),
         scrapedAt: new Date(),

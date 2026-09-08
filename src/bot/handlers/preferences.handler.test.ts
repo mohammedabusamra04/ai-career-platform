@@ -133,7 +133,7 @@ describe('registerPreferencesHandler', () => {
       location: 'Remote',
       skills: ['Node.js'],
       timezone: 'Asia/Gaza',
-      notificationTimes: ['04:30', '16:30'],
+      notificationTimes: ['07:00', '19:00'],
     };
 
     vi.mocked(preferenceService.createPreferences).mockReturnValue(mockSavedPreferences);

@@ -1,12 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 
 import env from '../../../config/env.js';
+import logger from '../../../shared/utils/logger.js';
 import type { AIProvider } from './ai-provider.interface.js';
 import { AIProviderError } from './ai-provider.error.js';
 import type { MatchingInput, MatchingResult } from '../matching.types.js';
 
 export class GeminiProvider implements AIProvider {
   private readonly client: GoogleGenAI;
+  private readonly model = 'gemini-2.5-flash';
 
   constructor() {
     this.client = new GoogleGenAI({
@@ -44,8 +46,8 @@ Return ONLY valid JSON in this exact format:
     let response;
 
     try {
-      response = await this.client.models.generateContent({
-        model: 'gemini-2.5-flash',
+      response = await this.generateWithRetry({
+        model: this.model,
         contents: prompt,
       });
     } catch {
@@ -55,15 +57,53 @@ Return ONLY valid JSON in this exact format:
     return this.parseResponse(response.text);
   }
 
+  /**
+   * Retries transient Gemini failures (503/429/500) with exponential backoff,
+   * adapted from Daily_Jobs_Bot agent.js.
+   */
+  private async generateWithRetry(
+    params: { model: string; contents: string },
+    maxRetries = 4,
+  ): Promise<{ text: string | undefined }> {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.client.models.generateContent(params);
+      } catch (err) {
+        lastError = err;
+        const status = (err as { status?: number })?.status;
+        const isRetryable = status === 503 || status === 429 || status === 500;
+
+        if (!isRetryable || attempt === maxRetries) {
+          throw err;
+        }
+
+        const waitMs = 2000 * Math.pow(2, attempt);
+        logger.warn(
+          `Transient Gemini error (status ${status}), retrying in ${waitMs / 1000}s (attempt ${attempt + 1}/${maxRetries})`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+
+    throw lastError;
+  }
+
   private parseResponse(text: string | undefined): MatchingResult {
     if (!text) {
       throw new AIProviderError('AI returned an empty response');
     }
 
+    const cleaned = text
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
     let parsed: unknown;
 
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(cleaned);
     } catch {
       throw new AIProviderError('AI returned invalid JSON');
     }

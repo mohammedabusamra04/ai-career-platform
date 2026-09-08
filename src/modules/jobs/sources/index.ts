@@ -6,4 +6,6 @@ export { RemotiveJobSource } from './remotive.source.js';
 export { WeWorkRemotelyJobSource } from './weworkremotely.source.js';
 export { MostaqlJobSource } from './mostaql.source.js';
 export { BaytJobSource } from './bayt.source.js';
+export { WuzzufJobSource } from './wuzzuf.source.js';
+export { ForasnaJobSource } from './forasna.source.js';
 export { LinkedinJobSource } from './linkedin.source.js';
