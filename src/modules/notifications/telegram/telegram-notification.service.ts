@@ -31,7 +31,24 @@ export class TelegramNotificationService implements NotificationService {
     }
   }
 
+  async sendNoJobsMatched(chatId: number): Promise<void> {
+    const message =
+      '🔍 لم يتم العثور على وظائف جديدة مطابقة لتفضيلاتك حالياً.\n\n' +
+      'سنستمر في البحث وإشعارك في موعد الإشعار القادم فور توفر فرص عمل مناسبة!';
+
+    try {
+      await this.api.sendMessage(chatId, message);
+    } catch (error) {
+      console.error(`Failed to send no-match notification to chat ${chatId}:`, error);
+    }
+  }
+
   async sendJobs(chatId: number, matchedJobs: MatchedJob[]): Promise<void> {
+    if (matchedJobs.length === 0) {
+      await this.sendNoJobsMatched(chatId);
+      return;
+    }
+
     for (const matchedJob of matchedJobs) {
       await this.sendJob(chatId, matchedJob);
     }

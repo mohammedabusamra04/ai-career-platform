@@ -108,4 +108,35 @@ describe('TelegramNotificationService', () => {
 
     expect(sendMessage).toHaveBeenCalledTimes(3);
   });
+
+  it('should send a no-match message when no matching jobs are found', async () => {
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+    const api: TelegramApi = {
+      sendMessage,
+    };
+
+    const service = new TelegramNotificationService(api);
+
+    await service.sendJobs(123456, []);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      123456,
+      expect.stringContaining('لم يتم العثور على وظائف جديدة مطابقة'),
+    );
+  });
+
+  it('should handle Telegram API failures safely in sendNoJobsMatched', async () => {
+    const sendMessage = vi.fn().mockRejectedValue(new Error('Telegram error'));
+
+    const api: TelegramApi = {
+      sendMessage,
+    };
+
+    const service = new TelegramNotificationService(api);
+
+    await expect(service.sendNoJobsMatched(123456)).resolves.toBeUndefined();
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+  });
 });

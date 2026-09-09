@@ -45,7 +45,15 @@ describe('Job Pipeline Route', () => {
   };
 
   it('should run job pipeline successfully and return success response', async () => {
-    vi.mocked(jobPipelineService.run).mockResolvedValueOnce(undefined);
+    const pipelineResult = {
+      subscribers: 1,
+      processed: 1,
+      notifiedWithJobs: 1,
+      notifiedNoMatch: 0,
+      skippedNoPreferences: 0,
+      errors: 0,
+    };
+    vi.mocked(jobPipelineService.run).mockResolvedValueOnce(pipelineResult);
 
     const handler = getRunHandler();
     await handler(mockRequest as Request, mockResponse as unknown as Response, nextFunction);
@@ -53,6 +61,7 @@ describe('Job Pipeline Route', () => {
     expect(jobPipelineService.run).toHaveBeenCalledTimes(1);
     expect(mockResponse.success).toHaveBeenCalledWith({
       message: 'Job pipeline executed successfully',
+      data: pipelineResult,
     });
     expect(nextFunction).not.toHaveBeenCalled();
   });

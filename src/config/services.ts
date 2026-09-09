@@ -6,7 +6,19 @@ import { JobCollectionService } from '../modules/jobs/job.collection.service.js'
 
 import { JobPipelineService } from '../modules/jobs/job.pipeline.service.js';
 
-import { JobSourceManager } from '../modules/jobs/sources/job-source.manager.js';
+import env from './env.js';
+
+import {
+  JobSourceManager,
+  RemotiveJobSource,
+  WeWorkRemotelyJobSource,
+  MostaqlJobSource,
+  BaytJobSource,
+  WuzzufJobSource,
+  ForasnaJobSource,
+  LinkedinJobSource,
+} from '../modules/jobs/sources/index.js';
+import type { JobSource } from '../modules/jobs/sources/job-source.interface.js';
 
 import { DeduplicationService } from '../modules/deduplication/deduplication.service.js';
 
@@ -30,7 +42,17 @@ import { bot } from '../bot/bot.js';
 
 const cache = new RedisAdapter(redisClient);
 
-const jobSourceManager = new JobSourceManager([]);
+const activeJobSources: JobSource[] = [
+  new RemotiveJobSource(),
+  new WeWorkRemotelyJobSource(),
+  new MostaqlJobSource(),
+  new BaytJobSource(),
+  new WuzzufJobSource(),
+  new ForasnaJobSource(),
+  ...(env.rapidApiKey ? [new LinkedinJobSource(env.rapidApiKey)] : []),
+];
+
+const jobSourceManager = new JobSourceManager(activeJobSources);
 
 export const jobCollectionService = new JobCollectionService(jobSourceManager);
 

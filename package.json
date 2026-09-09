@@ -8,7 +8,11 @@
     "watch": "tsc -w --preserveWatchOutput",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
+    "pipeline:run": "tsx src/scripts/run-pipeline.ts",
     "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ci": "vitest run --reporter=verbose",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -19,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/cheerio": "^0.22.35",
     "@types/express": "^5.0.6",
     "@types/ioredis": "^4.28.10",
     "@types/luxon": "^3.7.5",
@@ -34,6 +39,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
+    "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "grammy": "^1.46.0",

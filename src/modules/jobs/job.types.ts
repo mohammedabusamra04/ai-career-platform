@@ -9,6 +9,9 @@ export enum JobSourceType {
   NARIGULF = 'narigulf',
   FREELANCER = 'freelancer',
   WE_WORK_REMOTELY = 'we_work_remotely',
+  REMOTIVE = 'remotive',
+  WUZZUF = 'wuzzuf',
+  FORASNA = 'forasna',
   LINKEDIN = 'linkedin',
   OTHER = 'other',
 }
