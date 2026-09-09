@@ -1,11 +1,14 @@
 name: Daily Job Agent
 
 on:
-  schedule:
-    
-    
-    - cron: '0 7 * * *'   
-    - cron: '0 19 * * *'  
+  # Scheduled cron disabled: the server (server.ts) now stays awake on Render
+  # via the keep-alive workflow, so its built-in jobNotificationScheduler
+  # already sends notifications at each user's preferred local times.
+  # Keeping this cron too would cause duplicate notification runs.
+  # Uncomment below only if you stop using the keep-alive workflow.
+  # schedule:
+  #   - cron: '0 7 * * *'
+  #   - cron: '0 19 * * *'
   workflow_dispatch: {}
 
 jobs:
