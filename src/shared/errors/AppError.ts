@@ -33,4 +33,8 @@ export class AppError extends Error {
   static forbidden(message: string): AppError {
     return new AppError(message, StatusCodes.FORBIDDEN);
   }
+
+  static internal(message = 'Internal server error'): AppError {
+    return new AppError(message, StatusCodes.INTERNAL_SERVER_ERROR);
+  }
 }
