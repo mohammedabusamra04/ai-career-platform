@@ -5,4 +5,5 @@ export const CACHE_TTL = {
   // Preferences must outlive daily runs; 24h caused silent skips after one day.
   PREFERENCES: ms('90d') / 1000,
   FINGERPRINT: ms('24h') / 1000,
+  SENT_JOB: ms('30d') / 1000,
 };

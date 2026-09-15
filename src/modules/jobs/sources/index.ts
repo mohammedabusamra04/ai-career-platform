@@ -2,6 +2,10 @@ export { JobSourceManager } from './job-source.manager.js';
 export { JobSourceRegistry } from './job-source.registry.js';
 export type { JobSource } from './job-source.interface.js';
 export { JobSourceError } from './job-source.error.js';
+export { ArbeitnowJobSource } from './arbeitnow.source.js';
+export { AdzunaJobSource } from './adzuna.source.js';
+export { JoobleJobSource } from './jooble.source.js';
+export { TanqeebJobSource } from './tanqeeb.source.js';
 export { RemotiveJobSource } from './remotive.source.js';
 export { WeWorkRemotelyJobSource } from './weworkremotely.source.js';
 export { MostaqlJobSource } from './mostaql.source.js';
@@ -9,3 +13,4 @@ export { BaytJobSource } from './bayt.source.js';
 export { WuzzufJobSource } from './wuzzuf.source.js';
 export { ForasnaJobSource } from './forasna.source.js';
 export { LinkedinJobSource } from './linkedin.source.js';
+

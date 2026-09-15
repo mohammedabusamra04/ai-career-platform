@@ -33,6 +33,7 @@ export class RemotiveJobSource implements JobSource {
           'User-Agent': 'AICareerPlatform/1.0',
           Accept: 'application/json',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -59,19 +60,23 @@ export class RemotiveJobSource implements JobSource {
 
     const pubDate = new Date(item.publication_date);
     const validPubDate = Number.isNaN(pubDate.getTime()) ? new Date() : pubDate;
+    const applicationUrl = item.url || 'https://remotive.com';
 
     return {
       title: item.title,
       company: item.company_name || 'Remote Company',
       source: JobSourceType.REMOTIVE,
-      applicationUrl: item.url,
+      applicationUrl,
+      url: applicationUrl,
       location: item.candidate_required_location || 'Remote (Worldwide)',
       country: item.candidate_required_location || undefined,
+      remote: true,
       workType: WorkType.REMOTE,
       experienceLevel: query.experienceLevel || ExperienceLevel.MID,
       description: cleanDescription,
       skills: Array.isArray(item.tags) ? item.tags : [],
       publicationDate: validPubDate,
+      publishedAt: validPubDate,
       scrapedAt: new Date(),
     };
   }

@@ -23,6 +23,7 @@ export class BaytJobSource implements JobSource {
           Accept: 'text/html,application/xhtml+xml,application/xml',
           'Accept-Language': 'en-US,en;q=0.9',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -65,18 +66,24 @@ export class BaytJobSource implements JobSource {
         return;
       }
 
+      const isRemote =
+        query.workType === WorkType.REMOTE || /remote|عن بعد/i.test(`${title} ${location}`);
+
       jobs.push({
         title,
         company,
         source: JobSourceType.BAYT,
         applicationUrl: link,
+        url: link,
         location,
         country: location,
-        workType: query.workType || WorkType.REMOTE,
+        remote: isRemote,
+        workType: isRemote ? WorkType.REMOTE : query.workType || WorkType.ON_SITE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
         description: `${title} at ${company} in ${location}`,
         skills: query.skills || [],
         publicationDate: new Date(),
+        publishedAt: new Date(),
         scrapedAt: new Date(),
       });
     });

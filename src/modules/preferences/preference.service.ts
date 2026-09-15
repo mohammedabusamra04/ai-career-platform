@@ -18,6 +18,8 @@ import {
   validateJobTitle,
 } from './preference.validator.js';
 
+import env from '../../config/env.js';
+
 export class PreferenceService {
   constructor(private readonly cache: Cache) {}
 
@@ -27,6 +29,8 @@ export class PreferenceService {
     experienceLevel: string;
     location?: string;
     skills?: string;
+    timezone?: string;
+    notificationTimes?: string[];
   }): UserPreferences {
     const jobTitle = normalizeJobTitle(input.jobTitle);
 
@@ -48,8 +52,8 @@ export class PreferenceService {
       experienceLevel: input.experienceLevel as ExperienceLevel,
       location: input.location ? normalizeLocation(input.location) : undefined,
       skills: input.skills ? normalizeSkills(input.skills) : undefined,
-      timezone: 'Asia/Gaza',
-      notificationTimes: ['07:00', '19:00'],
+      timezone: input.timezone || env.timezone || 'Asia/Gaza',
+      notificationTimes: input.notificationTimes || [env.jobRunTime1, env.jobRunTime2],
     };
   }
 
