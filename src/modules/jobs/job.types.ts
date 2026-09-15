@@ -1,9 +1,13 @@
 import { WorkType, ExperienceLevel } from '../../shared/types/job.js';
 
 export enum JobSourceType {
+  ARBEITNOW = 'arbeitnow',
+  ADZUNA = 'adzuna',
+  JOOBLE = 'jooble',
+  TANQEEB = 'tanqeeb',
+  TAQNEEB = 'taqneeb',
   MOSTAQEL = 'mostaqel',
   BAEED = 'baeed',
-  TAQNEEB = 'taqneeb',
   SOUQ = 'souq',
   BAYT = 'bayt',
   NARIGULF = 'narigulf',
@@ -19,11 +23,13 @@ export enum JobSourceType {
 export interface Job {
   title: string;
   company: string;
-  source: JobSourceType;
+  source: JobSourceType | string;
   applicationUrl: string;
+  url: string;
 
   location?: string;
   country?: string;
+  remote?: boolean;
 
   workType?: WorkType;
   experienceLevel?: ExperienceLevel;
@@ -32,6 +38,12 @@ export interface Job {
   skills: string[];
 
   publicationDate: Date;
+  publishedAt?: Date;
+
+  salaryMin?: number;
+  salaryMax?: number;
+  currency?: string;
+
   scrapedAt: Date;
 }
 

@@ -22,6 +22,7 @@ export class WuzzufJobSource implements JobSource {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
           Accept: 'text/html,application/xhtml+xml,application/xml',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -64,18 +65,24 @@ export class WuzzufJobSource implements JobSource {
         return;
       }
 
+      const isRemote =
+        query.workType === WorkType.REMOTE || /remote|عن بعد/i.test(`${title} ${location}`);
+
       jobs.push({
         title,
         company,
         source: JobSourceType.WUZZUF,
         applicationUrl: link,
+        url: link,
         location,
         country: location,
-        workType: query.workType || WorkType.ON_SITE,
+        remote: isRemote,
+        workType: isRemote ? WorkType.REMOTE : query.workType || WorkType.ON_SITE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
         description: `${title} at ${company} in ${location}`,
         skills: query.skills || [],
         publicationDate: new Date(),
+        publishedAt: new Date(),
         scrapedAt: new Date(),
       });
     });

@@ -15,6 +15,7 @@ export class WeWorkRemotelyJobSource implements JobSource {
           'User-Agent': 'AICareerPlatform/1.0',
           Accept: 'application/rss+xml, application/xml, text/xml',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -79,12 +80,15 @@ export class WeWorkRemotelyJobSource implements JobSource {
         company,
         source: JobSourceType.WE_WORK_REMOTELY,
         applicationUrl: link,
+        url: link,
         location: 'Remote',
+        remote: true,
         workType: WorkType.REMOTE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
         description: cleanDescription,
         skills: query.skills || [],
         publicationDate: validPubDate,
+        publishedAt: validPubDate,
         scrapedAt: new Date(),
       });
     }

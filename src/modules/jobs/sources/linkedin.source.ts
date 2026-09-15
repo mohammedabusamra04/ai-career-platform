@@ -47,6 +47,7 @@ export class LinkedinJobSource implements JobSource {
           'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
           Accept: 'application/json',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -70,20 +71,24 @@ export class LinkedinJobSource implements JobSource {
       ? new Date(item.job_posted_at_datetime_utc)
       : new Date();
     const validPubDate = Number.isNaN(pubDate.getTime()) ? new Date() : pubDate;
+    const applicationUrl =
+      item.job_apply_link || item.job_google_link || 'https://www.linkedin.com/jobs';
 
     return {
       title: item.job_title || query.jobTitle,
       company: item.employer_name || 'LinkedIn Employer',
       source: JobSourceType.LINKEDIN,
-      applicationUrl:
-        item.job_apply_link || item.job_google_link || 'https://www.linkedin.com/jobs',
+      applicationUrl,
+      url: applicationUrl,
       location: item.job_city || (item.job_is_remote ? 'Remote' : 'Worldwide'),
       country: item.job_country || undefined,
+      remote: Boolean(item.job_is_remote),
       workType: item.job_is_remote ? WorkType.REMOTE : query.workType || WorkType.ON_SITE,
       experienceLevel: query.experienceLevel || ExperienceLevel.MID,
       description: item.job_description || item.job_title || '',
       skills: Array.isArray(item.job_required_skills) ? item.job_required_skills : query.skills || [],
       publicationDate: validPubDate,
+      publishedAt: validPubDate,
       scrapedAt: new Date(),
     };
   }

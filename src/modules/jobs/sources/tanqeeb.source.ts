@@ -6,14 +6,14 @@ import type { JobSource } from './job-source.interface.js';
 import { ExperienceLevel, WorkType } from '../../../shared/types/job.js';
 
 /**
- * Scrapes Bayt.com job listings.
- * Selectors adapted from Daily_Jobs_Bot tools/baytJobs.js.
+ * Scrapes Tanqeeb (MENA/Arabic job search engine).
  */
-export class BaytJobSource implements JobSource {
-  public readonly type = JobSourceType.BAYT;
+export class TanqeebJobSource implements JobSource {
+  public readonly type = JobSourceType.TANQEEB;
 
   async fetchJobs(query: JobSearchQuery): Promise<Job[]> {
-    const url = `https://www.bayt.com/en/jobs/?q=${encodeURIComponent(query.jobTitle.trim())}`;
+    const searchTerm = query.jobTitle.trim();
+    const url = `https://www.tanqeeb.com/en/jobs/search?keywords=${encodeURIComponent(searchTerm)}`;
 
     try {
       const response = await fetch(url, {
@@ -21,7 +21,7 @@ export class BaytJobSource implements JobSource {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
           Accept: 'text/html,application/xhtml+xml,application/xml',
-          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
         },
         signal: AbortSignal.timeout(8000),
       });
@@ -41,38 +41,53 @@ export class BaytJobSource implements JobSource {
     const $ = cheerio.load(html);
     const jobs: Job[] = [];
 
-    $('li[data-js-job], .has-pointer-d').each((_, el) => {
+    $('.card-list-item, .job-listing, .card-item, div[class*="job"], article').each((_, el) => {
       if (jobs.length >= 15) {
         return;
       }
 
-      const titleEl = $(el).find('h2 a, a[data-js-aid="jobID"]').first();
+      const titleEl = $(el)
+        .find('h2 a, .card-title a, a[href*="/jobs/"], a[href*="/job/"]')
+        .first();
       const title = titleEl.text().trim();
       let link = titleEl.attr('href');
-      if (link && !link.startsWith('http')) {
-        link = `https://www.bayt.com${link}`;
-      }
-
-      const company =
-        $(el).find('.t-nowrap.p10l a, b.t-nowrap, b[class*="company"]').first().text().trim() ||
-        'Bayt Employer';
-
-      const location =
-        $(el).find('.t-mute.t-small, span.t-mute').first().text().trim() ||
-        query.location ||
-        'Middle East';
 
       if (!title || !link) {
         return;
       }
 
+      if (!link.startsWith('http')) {
+        link = `https://www.tanqeeb.com${link.startsWith('/') ? '' : '/'}${link}`;
+      }
+
+      const company =
+        $(el)
+          .find('.card-company, .company, span[class*="company"], .t-company')
+          .first()
+          .text()
+          .trim() || 'Tanqeeb Employer';
+
+      const location =
+        $(el)
+          .find('.card-location, .location, span[class*="location"], .t-location')
+          .first()
+          .text()
+          .trim() ||
+        query.location ||
+        'Middle East';
+
+      const description =
+        $(el).find('.card-desc, p, .snippet').first().text().trim() ||
+        `${title} at ${company} in ${location}`;
+
       const isRemote =
-        query.workType === WorkType.REMOTE || /remote|عن بعد/i.test(`${title} ${location}`);
+        query.workType === WorkType.REMOTE ||
+        /remote|عن بعد/i.test(`${title} ${location} ${description}`);
 
       jobs.push({
         title,
         company,
-        source: JobSourceType.BAYT,
+        source: JobSourceType.TANQEEB,
         applicationUrl: link,
         url: link,
         location,
@@ -80,7 +95,7 @@ export class BaytJobSource implements JobSource {
         remote: isRemote,
         workType: isRemote ? WorkType.REMOTE : query.workType || WorkType.ON_SITE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
-        description: `${title} at ${company} in ${location}`,
+        description,
         skills: query.skills || [],
         publicationDate: new Date(),
         publishedAt: new Date(),

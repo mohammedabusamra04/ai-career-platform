@@ -48,9 +48,22 @@ export interface PipelineRunResult {
   notifiedNoMatch: number;
   skippedNoPreferences: number;
   errors: number;
+  totalJobsCollected: number;
+}
+
+export interface LastPipelineStats {
+  lastRunAt: Date;
+  subscribers: number;
+  notifiedWithJobs: number;
+  notifiedNoMatch: number;
+  skippedNoPreferences: number;
+  errors: number;
+  totalJobsCollected: number;
 }
 
 export class JobPipelineService {
+  private lastStats: LastPipelineStats | null = null;
+
   constructor(
     private readonly jobCollectionService: JobCollector,
     private readonly deduplicationService: JobDeduplicator,
@@ -61,6 +74,10 @@ export class JobPipelineService {
     private readonly matchingService: JobMatcher,
     private readonly notificationService: JobNotifier,
   ) {}
+
+  getLastStats(): LastPipelineStats | null {
+    return this.lastStats;
+  }
 
   async run(): Promise<PipelineRunResult> {
     const subscribers = await this.subscriptionService.getSubscribedUsers();
@@ -73,6 +90,7 @@ export class JobPipelineService {
       notifiedNoMatch: 0,
       skippedNoPreferences: 0,
       errors: 0,
+      totalJobsCollected: 0,
     };
 
     for (const userId of subscribers) {
@@ -89,6 +107,16 @@ export class JobPipelineService {
         result.errors += 1;
       }
     }
+
+    this.lastStats = {
+      lastRunAt: new Date(),
+      subscribers: result.subscribers,
+      notifiedWithJobs: result.notifiedWithJobs,
+      notifiedNoMatch: result.notifiedNoMatch,
+      skippedNoPreferences: result.skippedNoPreferences,
+      errors: result.errors,
+      totalJobsCollected: result.totalJobsCollected,
+    };
 
     logger.info(
       `Job pipeline finished. subscribers=${result.subscribers}, withJobs=${result.notifiedWithJobs}, noMatch=${result.notifiedNoMatch}, skippedNoPrefs=${result.skippedNoPreferences}, errors=${result.errors}`,
@@ -155,8 +183,43 @@ export class JobPipelineService {
         return 'no_match';
       }
 
-      logger.info(`Sending ${qualityMatches.length} matched jobs to user ${userId}.`);
-      await this.notificationService.sendJobs(userId, qualityMatches);
+      // Filter out jobs that have already been sent to this user in previous runs
+      const unsentMatches: MatchedJob[] = [];
+      for (const match of qualityMatches) {
+        const fingerprint = this.fingerprintService.generate(match.job);
+        const sentKey = cacheKeys.userSentJob(userId, fingerprint);
+        const alreadySent = await this.cache.get(sentKey);
+
+        if (!alreadySent) {
+          unsentMatches.push(match);
+        }
+      }
+
+      if (unsentMatches.length === 0) {
+        logger.info(
+          `All ${qualityMatches.length} matching jobs were already sent to user ${userId} previously.`,
+        );
+        return 'no_match';
+      }
+
+      logger.info(`Sending ${unsentMatches.length} new matched jobs to user ${userId}.`);
+      await this.notificationService.sendJobs(userId, unsentMatches);
+
+      // Record sent jobs in Redis with 30-day TTL to prevent duplicate notifications
+      for (const match of unsentMatches) {
+        const fingerprint = this.fingerprintService.generate(match.job);
+        const sentKey = cacheKeys.userSentJob(userId, fingerprint);
+        await this.cache.set(
+          sentKey,
+          {
+            sentAt: new Date().toISOString(),
+            jobTitle: match.job.title,
+            company: match.job.company,
+          },
+          CACHE_TTL.SENT_JOB,
+        );
+      }
+
       return 'sent_jobs';
     } catch (error) {
       console.error(`Failed to process job pipeline for user ${userId}:`, error);

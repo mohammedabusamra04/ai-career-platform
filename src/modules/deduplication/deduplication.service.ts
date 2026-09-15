@@ -13,19 +13,31 @@ export class DeduplicationService {
 
   async deduplicate(jobs: Job[]): Promise<DeduplicationResult> {
     const uniqueJobsByFingerprint = new Map<string, Job>();
+    const seenSemanticKeys = new Map<string, string>(); // semanticKey -> primaryFingerprint
     const duplicateJobs: Job[] = [];
 
     for (const job of jobs) {
       const fingerprint = this.fingerprintService.generate(job);
-      const key = cacheKeys.fingerprint(fingerprint);
+      const semanticKey = this.fingerprintService.generateSemanticFingerprint(job);
+      const cacheKey = cacheKeys.fingerprint(fingerprint);
 
-      const existingJob = uniqueJobsByFingerprint.get(fingerprint);
+      const existingByPrimary = uniqueJobsByFingerprint.get(fingerprint);
+      const existingPrimaryForSemantic = seenSemanticKeys.get(semanticKey);
+      const existingBySemantic = existingPrimaryForSemantic
+        ? uniqueJobsByFingerprint.get(existingPrimaryForSemantic)
+        : undefined;
 
-      const acquired = await this.cache.setIfNotExists(key, true, CACHE_TTL.FINGERPRINT);
+      const existingJob = existingByPrimary || existingBySemantic;
+
+      const acquired = await this.cache.setIfNotExists(cacheKey, true, CACHE_TTL.FINGERPRINT);
 
       if (!acquired || existingJob) {
         if (existingJob && this.scoreJob(job) > this.scoreJob(existingJob)) {
+          // Replace with higher quality job data
+          const oldFingerprint = this.fingerprintService.generate(existingJob);
+          uniqueJobsByFingerprint.delete(oldFingerprint);
           uniqueJobsByFingerprint.set(fingerprint, job);
+          seenSemanticKeys.set(semanticKey, fingerprint);
         }
 
         duplicateJobs.push(job);
@@ -33,8 +45,9 @@ export class DeduplicationService {
       }
 
       uniqueJobsByFingerprint.set(fingerprint, job);
+      seenSemanticKeys.set(semanticKey, fingerprint);
 
-      await this.cache.set(key, true, CACHE_TTL.FINGERPRINT);
+      await this.cache.set(cacheKey, true, CACHE_TTL.FINGERPRINT);
     }
 
     return {
@@ -46,11 +59,13 @@ export class DeduplicationService {
   private scoreJob(job: Job): number {
     let score = 0;
 
-    if (job.description) score++;
+    if (job.description && job.description.length > 20) score += 2;
     if (job.location) score++;
     if (job.country) score++;
     if (job.workType) score++;
     if (job.experienceLevel) score++;
+    if (job.salaryMin || job.salaryMax) score += 2;
+    if (job.remote) score++;
 
     score += job.skills.length;
 
