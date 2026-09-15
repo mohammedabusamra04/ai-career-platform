@@ -1,34 +1,44 @@
-name: Daily Job Agent
+name: Scheduled Job Pipeline
 
 on:
-  # Scheduled cron disabled: the server (server.ts) now stays awake on Render
-  # via the keep-alive workflow, so its built-in jobNotificationScheduler
-  # already sends notifications at each user's preferred local times.
-  # Keeping this cron too would cause duplicate notification runs.
-  # Uncomment below only if you stop using the keep-alive workflow.
-  # schedule:
-  #   - cron: '0 7 * * *'
-  #   - cron: '0 19 * * *'
-  workflow_dispatch: {}
+  schedule:
+    # Runs twice daily at 06:00 and 15:00 UTC (equivalent to 09:00 and 18:00 UTC+3 / Asia/Gaza)
+    - cron: '0 6,15 * * *'
+  workflow_dispatch:
+    # Allows manual triggering from GitHub Actions tab anytime
 
 jobs:
-  run-agent:
+  run-pipeline:
+    name: Run Job Collection & Telegram Dispatch
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
+          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: Run job pipeline
+      - name: Run Daily Job Pipeline
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          REDIS_URL: ${{ secrets.REDIS_URL }}
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          NODE_ENV: production
+          PORT: 3000
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        run: npx tsx src/scripts/run-pipeline.ts
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          JOB_RUN_TIME_1: ${{ secrets.JOB_RUN_TIME_1 || '09:00' }}
+          JOB_RUN_TIME_2: ${{ secrets.JOB_RUN_TIME_2 || '18:00' }}
+          TIMEZONE: ${{ secrets.TIMEZONE || 'Asia/Gaza' }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          API_BEARER_TOKEN: ${{ secrets.API_BEARER_TOKEN }}
+        run: npm run pipeline:run

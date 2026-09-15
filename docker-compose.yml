@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JOB_RUN_TIME_1=${JOB_RUN_TIME_1:-09:00}
+      - JOB_RUN_TIME_2=${JOB_RUN_TIME_2:-18:00}
+      - TIMEZONE=${TIMEZONE:-Asia/Gaza}
+      - ADZUNA_APP_ID=${ADZUNA_APP_ID}
+      - ADZUNA_APP_KEY=${ADZUNA_APP_KEY}
+      - JOOBLE_API_KEY=${JOOBLE_API_KEY}
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - API_BEARER_TOKEN=${API_BEARER_TOKEN}
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
