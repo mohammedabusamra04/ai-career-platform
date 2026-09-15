@@ -10,6 +10,10 @@ import env from './env.js';
 
 import {
   JobSourceManager,
+  ArbeitnowJobSource,
+  AdzunaJobSource,
+  JoobleJobSource,
+  TanqeebJobSource,
   RemotiveJobSource,
   WeWorkRemotelyJobSource,
   MostaqlJobSource,
@@ -40,19 +44,25 @@ import { subscriptionService } from '../modules/subscriptions/subscription.servi
 
 import { bot } from '../bot/bot.js';
 
-const cache = new RedisAdapter(redisClient);
+export const cache = new RedisAdapter(redisClient);
 
-const activeJobSources: JobSource[] = [
+export const activeJobSources: JobSource[] = [
+  new ArbeitnowJobSource(),
   new RemotiveJobSource(),
   new WeWorkRemotelyJobSource(),
   new MostaqlJobSource(),
+  new TanqeebJobSource(),
   new BaytJobSource(),
   new WuzzufJobSource(),
   new ForasnaJobSource(),
+  ...(env.adzunaAppId && env.adzunaAppKey
+    ? [new AdzunaJobSource(env.adzunaAppId, env.adzunaAppKey)]
+    : []),
+  ...(env.joobleApiKey ? [new JoobleJobSource(env.joobleApiKey)] : []),
   ...(env.rapidApiKey ? [new LinkedinJobSource(env.rapidApiKey)] : []),
 ];
 
-const jobSourceManager = new JobSourceManager(activeJobSources);
+export const jobSourceManager = new JobSourceManager(activeJobSources);
 
 export const jobCollectionService = new JobCollectionService(jobSourceManager);
 
