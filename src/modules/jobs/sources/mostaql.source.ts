@@ -23,6 +23,7 @@ export class MostaqlJobSource implements JobSource {
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
           Accept: 'text/html,application/xhtml+xml,application/xml',
         },
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -69,13 +70,16 @@ export class MostaqlJobSource implements JobSource {
         company: 'مستقل (مشروع فريلانس)',
         source: JobSourceType.MOSTAQEL,
         applicationUrl: link,
+        url: link,
         location: 'عن بعد (Freelance)',
         country: 'الشرق الأوسط / عن بعد',
+        remote: true,
         workType: WorkType.REMOTE,
         experienceLevel: query.experienceLevel || ExperienceLevel.MID,
         description,
         skills: query.skills || [],
         publicationDate: new Date(),
+        publishedAt: new Date(),
         scrapedAt: new Date(),
       });
     });

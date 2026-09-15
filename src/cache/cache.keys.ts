@@ -8,4 +8,6 @@ export const cacheKeys = {
   fingerprint: (fingerprint: string) => `fingerprint:${fingerprint}`,
 
   subscriptionStatus: (userId: string) => `subscription:${userId}`,
+
+  userSentJob: (userId: string | number, fingerprint: string) => `user:${userId}:sent:${fingerprint}`,
 };
