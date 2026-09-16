@@ -19,10 +19,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const query = 'AI Engineer in Remote';
-  const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(
+  const query = 'Senior Backend Developer in Remote';
+  const url = `https://jsearch.p.rapidapi.com/search-v2?query=${encodeURIComponent(
     query,
-  )}&page=1&num_pages=1&date_posted=today`;
+  )}`;
 
   console.log(`🔍 Testing JSearch API with query: "${query}"`);
   console.log(`📡 URL: ${url}\n`);
@@ -36,6 +36,7 @@ async function main(): Promise<void> {
         'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
         Accept: 'application/json',
       },
+      signal: AbortSignal.timeout(15000),
     });
 
     const elapsed = Date.now() - start;
@@ -65,17 +66,32 @@ async function main(): Promise<void> {
 
     const data = (await response.json()) as {
       status?: string;
-      data?: Array<{
-        job_title?: string;
-        employer_name?: string;
-        job_city?: string;
-        job_is_remote?: boolean;
-        job_posted_at_datetime_utc?: string;
-        job_apply_link?: string;
-      }>;
+      data?:
+        | Array<{
+            job_title?: string;
+            employer_name?: string;
+            job_city?: string;
+            job_is_remote?: boolean;
+            job_posted_at_datetime_utc?: string;
+            job_apply_link?: string;
+          }>
+        | {
+            jobs?: Array<{
+              job_title?: string;
+              employer_name?: string;
+              job_city?: string;
+              job_is_remote?: boolean;
+              job_posted_at_datetime_utc?: string;
+              job_apply_link?: string;
+            }>;
+          };
     };
 
-    const jobs = data.data ?? [];
+    const jobs = Array.isArray(data.data)
+      ? data.data
+      : data.data && typeof data.data === 'object' && Array.isArray(data.data.jobs)
+        ? data.data.jobs
+        : [];
 
     console.log(`\n✅ API is working. status="${data.status}", jobs returned: ${jobs.length}\n`);
 
