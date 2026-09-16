@@ -1,6 +1,7 @@
 import type { Cache } from '../../cache/cache.interface.js';
 import { cacheKeys } from '../../cache/cache.keys.js';
 import { CACHE_TTL } from '../../cache/cache.ttl.js';
+import env from '../../config/env.js';
 import logger from '../../shared/utils/logger.js';
 
 import type { Job, JobSearchQuery } from './job.types.js';
@@ -39,7 +40,7 @@ interface JobNotifier {
   sendJobs(chatId: number, matchedJobs: MatchedJob[]): Promise<void>;
 }
 
-const MINIMUM_MATCH_SCORE = 60;
+const MINIMUM_MATCH_SCORE = env.minMatchScore;
 
 export interface PipelineRunResult {
   subscribers: number;
