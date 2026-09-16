@@ -40,5 +40,7 @@ jobs:
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
           JOOBLE_API_KEY: ${{ secrets.JOOBLE_API_KEY }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
+          MIN_MATCH_SCORE: ${{ secrets.MIN_MATCH_SCORE || '40' }}
           API_BEARER_TOKEN: ${{ secrets.API_BEARER_TOKEN }}
         run: npm run pipeline:run
