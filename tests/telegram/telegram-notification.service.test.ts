@@ -47,7 +47,7 @@ describe('TelegramNotificationService', () => {
     await service.sendJobs(123456, []);
     expect(api.sendMessage).toHaveBeenCalledWith(
       123456,
-      expect.stringContaining('لم يتم العثور على وظائف جديدة'),
+      expect.stringContaining('No new jobs matching your preferences were found'),
     );
   });
 

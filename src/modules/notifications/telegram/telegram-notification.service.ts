@@ -33,8 +33,8 @@ export class TelegramNotificationService implements NotificationService {
 
   async sendNoJobsMatched(chatId: number): Promise<void> {
     const message =
-      '🔍 لم يتم العثور على وظائف جديدة مطابقة لتفضيلاتك حالياً.\n\n' +
-      'سنستمر في البحث وإشعارك في موعد الإشعار القادم فور توفر فرص عمل مناسبة!';
+      '🔍 No new jobs matching your preferences were found at the moment.\n\n' +
+      "We'll keep searching and notify you in the next notification schedule as soon as suitable opportunities are available!";
 
     try {
       await this.api.sendMessage(chatId, message);
