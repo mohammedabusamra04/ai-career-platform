@@ -13,7 +13,10 @@ export class JobCollectionService {
   }
 
   private isRecentJob(job: Job): boolean {
-    const cutoff = new Date(Date.now() - ms('24h'));
+    if (!job.publicationDate || isNaN(job.publicationDate.getTime())) {
+      return true;
+    }
+    const cutoff = new Date(Date.now() - ms('7d'));
 
     return job.publicationDate >= cutoff;
   }

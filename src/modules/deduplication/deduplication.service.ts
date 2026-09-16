@@ -1,14 +1,12 @@
 import type { Job } from '../jobs/job.types.js';
 import type { Cache } from '../../cache/cache.interface.js';
-import { cacheKeys } from '../../cache/cache.keys.js';
-import { CACHE_TTL } from '../../cache/cache.ttl.js';
 import type { DeduplicationResult } from './deduplication.types.js';
 import { FingerprintService } from './fingerprint.service.js';
 
 export class DeduplicationService {
   constructor(
     private readonly fingerprintService: FingerprintService,
-    private readonly cache: Cache,
+    _cache?: Cache,
   ) {}
 
   async deduplicate(jobs: Job[]): Promise<DeduplicationResult> {
@@ -19,7 +17,6 @@ export class DeduplicationService {
     for (const job of jobs) {
       const fingerprint = this.fingerprintService.generate(job);
       const semanticKey = this.fingerprintService.generateSemanticFingerprint(job);
-      const cacheKey = cacheKeys.fingerprint(fingerprint);
 
       const existingByPrimary = uniqueJobsByFingerprint.get(fingerprint);
       const existingPrimaryForSemantic = seenSemanticKeys.get(semanticKey);
@@ -29,10 +26,8 @@ export class DeduplicationService {
 
       const existingJob = existingByPrimary || existingBySemantic;
 
-      const acquired = await this.cache.setIfNotExists(cacheKey, true, CACHE_TTL.FINGERPRINT);
-
-      if (!acquired || existingJob) {
-        if (existingJob && this.scoreJob(job) > this.scoreJob(existingJob)) {
+      if (existingJob) {
+        if (this.scoreJob(job) > this.scoreJob(existingJob)) {
           // Replace with higher quality job data
           const oldFingerprint = this.fingerprintService.generate(existingJob);
           uniqueJobsByFingerprint.delete(oldFingerprint);
@@ -46,8 +41,6 @@ export class DeduplicationService {
 
       uniqueJobsByFingerprint.set(fingerprint, job);
       seenSemanticKeys.set(semanticKey, fingerprint);
-
-      await this.cache.set(cacheKey, true, CACHE_TTL.FINGERPRINT);
     }
 
     return {

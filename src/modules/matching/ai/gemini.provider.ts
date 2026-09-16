@@ -18,28 +18,26 @@ export class GeminiProvider implements AIProvider {
 
   async match(input: MatchingInput): Promise<MatchingResult> {
     const prompt = `
-You are a job matching assistant.
+You are an intelligent job matching assistant.
 
-Compare the user's preferences with the job and return a match score from 0 to 100.
+Compare the user's career preferences with the job posting and evaluate how relevant this job is for the user. Return a match score from 0 to 100.
 
-Consider:
-- Job title
-- Skills
-- Experience level
-- Work type
-- Location
-- Job description
+Guidelines:
+- Multilingual support: Treat Arabic and English equivalents (e.g., "مطور واجهات" = "Frontend Developer", "عن بعد" = "Remote", "دوام كامل" = "Full Time") as direct matches.
+- Core role and skills relevance: If the job title or primary technical role aligns with the user's target domain (e.g. Backend, Frontend, Full Stack, Mobile, etc.), provide a generous match score between 55 and 95.
+- If the role or domain is closely related, assign a score of 45-70.
+- Only assign very low scores (<30) if the job field is completely unrelated.
 
 User preferences:
 ${JSON.stringify(input.preferences)}
 
-Job:
+Job posting:
 ${JSON.stringify(input.job)}
 
 Return ONLY valid JSON in this exact format:
 {
   "score": number,
-  "reason": "short explanation"
+  "reason": "short explanation in English"
 }
 `;
 

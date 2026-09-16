@@ -1,5 +1,6 @@
 import type { Job } from '../jobs/job.types.js';
 import type { UserPreferences } from '../preferences/preference.types.js';
+import logger from '../../shared/utils/logger.js';
 
 import type { AIProvider } from './ai/ai-provider.interface.js';
 import type { MatchingResult } from './matching.types.js';
@@ -38,7 +39,10 @@ export class MatchingService {
         batch.map(async (job) => {
           try {
             return await this.matchJob(job, preferences);
-          } catch {
+          } catch (err) {
+            logger.warn(
+              `AI matching failed for job "${job.title}": ${err instanceof Error ? err.message : String(err)}`,
+            );
             return null;
           }
         }),
