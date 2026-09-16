@@ -13,4 +13,5 @@ export { BaytJobSource } from './bayt.source.js';
 export { WuzzufJobSource } from './wuzzuf.source.js';
 export { ForasnaJobSource } from './forasna.source.js';
 export { LinkedinJobSource } from './linkedin.source.js';
+export { FirecrawlLinkedInSource } from './firecrawl-linkedin.source.js';
 

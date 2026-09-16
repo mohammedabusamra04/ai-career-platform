@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "pipeline:run": "tsx src/scripts/run-pipeline.ts",
+    "test:sources:live": "tsx src/scripts/test-all-sources.ts",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit tests/sources tests/deduplication tests/matching tests/telegram tests/services",
     "test:integration": "vitest run tests/integration",

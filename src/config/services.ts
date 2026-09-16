@@ -21,6 +21,7 @@ import {
   WuzzufJobSource,
   ForasnaJobSource,
   LinkedinJobSource,
+  FirecrawlLinkedInSource,
 } from '../modules/jobs/sources/index.js';
 import type { JobSource } from '../modules/jobs/sources/job-source.interface.js';
 
@@ -59,7 +60,11 @@ export const activeJobSources: JobSource[] = [
     ? [new AdzunaJobSource(env.adzunaAppId, env.adzunaAppKey)]
     : []),
   ...(env.joobleApiKey ? [new JoobleJobSource(env.joobleApiKey)] : []),
-  ...(env.rapidApiKey ? [new LinkedinJobSource(env.rapidApiKey)] : []),
+  ...(env.firecrawlApiKey
+    ? [new FirecrawlLinkedInSource(env.firecrawlApiKey)]
+    : env.rapidApiKey
+      ? [new LinkedinJobSource(env.rapidApiKey)]
+      : []),
 ];
 
 export const jobSourceManager = new JobSourceManager(activeJobSources);
