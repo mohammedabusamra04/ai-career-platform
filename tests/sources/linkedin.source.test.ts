@@ -58,4 +58,38 @@ describe('LinkedinJobSource', () => {
       skills: ['TypeScript', 'Azure'],
     });
   });
+
+  it('should parse RapidAPI JSearch /search-v2 response with data.jobs array', async () => {
+    const mockApiResponse = {
+      status: 'OK',
+      data: {
+        jobs: [
+          {
+            job_id: 'v2_123',
+            job_title: 'Senior Backend Engineer',
+            employer_name: 'Netflix',
+            job_apply_link: 'https://jobs.netflix.com/job/v2_123',
+            job_city: 'Los Gatos',
+            job_is_remote: true,
+          },
+        ],
+      },
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockApiResponse,
+    });
+
+    const jobs = await source.fetchJobs({ jobTitle: 'Senior Backend Engineer' });
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]).toMatchObject({
+      title: 'Senior Backend Engineer',
+      company: 'Netflix',
+      source: JobSourceType.LINKEDIN,
+      applicationUrl: 'https://jobs.netflix.com/job/v2_123',
+      remote: true,
+    });
+  });
 });

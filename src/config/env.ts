@@ -16,6 +16,8 @@ const env = {
   adzunaAppKey: process.env.ADZUNA_APP_KEY || '',
   joobleApiKey: process.env.JOOBLE_API_KEY || '',
   rapidApiKey: process.env.RAPIDAPI_KEY || '',
+  minMatchScore: Number(process.env.MIN_MATCH_SCORE) || 40,
+  firecrawlApiKey: process.env.FIRECRAWL_API_KEY || '',
 };
 
 export default env;

@@ -19,7 +19,9 @@ interface JSearchJobItem {
 
 interface JSearchApiResponse {
   status?: string;
-  data?: JSearchJobItem[];
+  data?: JSearchJobItem[] | {
+    jobs?: JSearchJobItem[];
+  };
 }
 
 export class LinkedinJobSource implements JobSource {
@@ -36,9 +38,9 @@ export class LinkedinJobSource implements JobSource {
       .filter(Boolean)
       .join(' in ');
 
-    const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(
+    const url = `https://jsearch.p.rapidapi.com/search-v2?query=${encodeURIComponent(
       searchQuery,
-    )}&page=1&num_pages=1&date_posted=today`;
+    )}`;
 
     try {
       const response = await fetch(url, {
@@ -47,7 +49,7 @@ export class LinkedinJobSource implements JobSource {
           'X-RapidAPI-Host': 'jsearch.p.rapidapi.com',
           Accept: 'application/json',
         },
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -56,11 +58,13 @@ export class LinkedinJobSource implements JobSource {
 
       const data = (await response.json()) as JSearchApiResponse;
 
-      if (!data || !Array.isArray(data.data)) {
-        return [];
-      }
+      const jobsList: JSearchJobItem[] = Array.isArray(data.data)
+        ? data.data
+        : data.data && typeof data.data === 'object' && Array.isArray(data.data.jobs)
+          ? data.data.jobs
+          : [];
 
-      return data.data.map((item) => this.mapToJob(item, query));
+      return jobsList.map((item) => this.mapToJob(item, query));
     } catch {
       return [];
     }
