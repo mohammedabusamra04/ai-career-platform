@@ -8,7 +8,7 @@ import type { MatchingInput, MatchingResult } from '../matching.types.js';
 
 export class GeminiProvider implements AIProvider {
   private readonly client: GoogleGenAI;
-  private readonly model = 'gemini-2.5-flash';
+  private readonly model = 'gemini-2.0-flash';
 
   constructor() {
     this.client = new GoogleGenAI({
@@ -48,8 +48,10 @@ Return ONLY valid JSON in this exact format:
         model: this.model,
         contents: prompt,
       });
-    } catch {
-      throw new AIProviderError('Failed to generate AI matching result');
+    } catch (err) {
+      throw new AIProviderError(
+        `Failed to generate AI matching result: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
     return this.parseResponse(response.text);
