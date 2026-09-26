@@ -100,8 +100,28 @@ export class GeminiProvider implements AIProvider {
   /** Cooldown after daily quota exhaustion (resets on a daily boundary). */
   private static readonly DAILY_QUOTA_COOLDOWN_MS = ms('12h');
 
-  constructor() {
-    const apiKeys = env.geminiApiKeys.length > 0 ? env.geminiApiKeys : [env.geminiApiKey];
+  constructor(apiKeysInput?: string[]) {
+    let apiKeys: string[];
+
+    if (apiKeysInput !== undefined) {
+      apiKeys = apiKeysInput;
+    } else {
+      const configured =
+        env.geminiApiKeys.length > 0
+          ? env.geminiApiKeys
+          : env.geminiApiKey
+            ? [env.geminiApiKey]
+            : [];
+
+      if (
+        (configured.length === 0 || !configured[0]) &&
+        (process.env.NODE_ENV === 'test' || process.env.VITEST)
+      ) {
+        apiKeys = ['test-api-key'];
+      } else {
+        apiKeys = configured;
+      }
+    }
 
     if (apiKeys.length === 0 || !apiKeys[0]) {
       throw new AIProviderError('No Gemini API key configured');

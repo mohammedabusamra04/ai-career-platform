@@ -204,4 +204,8 @@ describe('GeminiProvider', () => {
       reason: 'Partial match',
     });
   });
+
+  it('should throw AIProviderError when no API key is provided', () => {
+    expect(() => new GeminiProvider([])).toThrow(AIProviderError);
+  });
 });
