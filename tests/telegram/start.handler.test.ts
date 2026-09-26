@@ -32,6 +32,9 @@ describe('registerStartHandler', () => {
     });
     expect(mockCtx.reply).toHaveBeenCalledWith(
       expect.stringContaining('Welcome to AI Career Bot!'),
+      expect.objectContaining({
+        reply_markup: expect.anything(),
+      }),
     );
   });
 });

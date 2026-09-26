@@ -5,3 +5,5 @@ export const confirmationKeyboard = new InlineKeyboard()
   .row()
   .text('🔄 Restart', 'preferences:restart')
   .text('✏️ Update', 'preferences:update');
+
+
