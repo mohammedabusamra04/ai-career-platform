@@ -28,30 +28,53 @@ describe('MatchingService', () => {
     scrapedAt: new Date(),
   };
 
-  it('should match jobs and return sorted matched results', async () => {
+  it('should match jobs using AI analysis when available', async () => {
     const aiProvider: AIProvider = {
-      match: vi.fn().mockResolvedValue({
-        score: 95,
-        reason: 'Perfect match for junior Node.js backend role',
-      }),
+      match: vi.fn(),
+      analyzeJob: vi.fn(),
+      hasAvailableSlot: () => true,
     };
 
-    const service = new MatchingService(aiProvider);
+    const fingerprintService = {
+      generate: () => 'dummy-fp',
+    };
+
+    const service = new MatchingService(aiProvider, undefined, fingerprintService);
+    const analyses = new Map([
+      [
+        'dummy-fp',
+        {
+          role: 'Backend Developer',
+          level: ExperienceLevel.JUNIOR,
+          skills: ['Node.js', 'TypeScript'],
+          workType: WorkType.REMOTE,
+        },
+      ],
+    ]);
+
+    const results = await service.matchJobs([dummyJob], dummyPreferences, analyses);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].score).toBeGreaterThanOrEqual(90);
+    expect(results[0].reason).toContain('role matches');
+  });
+
+  it('should fall back to rule-based matching when AI analysis is not provided', async () => {
+    const aiProvider: AIProvider = {
+      match: vi.fn(),
+      analyzeJob: vi.fn(),
+      hasAvailableSlot: () => true,
+    };
+
+    const fingerprintService = {
+      generate: () => 'dummy-fp',
+    };
+
+    const service = new MatchingService(aiProvider, undefined, fingerprintService);
     const results = await service.matchJobs([dummyJob], dummyPreferences);
 
     expect(results).toHaveLength(1);
-    expect(results[0].score).toBe(95);
-    expect(results[0].reason).toContain('Perfect match');
-  });
-
-  it('should filter out jobs when AI matching errors occurs', async () => {
-    const aiProvider: AIProvider = {
-      match: vi.fn().mockRejectedValue(new Error('AI rate limit')),
-    };
-
-    const service = new MatchingService(aiProvider);
-    const results = await service.matchJobs([dummyJob], dummyPreferences);
-
-    expect(results).toEqual([]);
+    expect(results[0].score).toBeGreaterThan(0);
+    expect(results[0].reason).toContain('role matches');
   });
 });
