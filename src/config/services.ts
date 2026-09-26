@@ -77,7 +77,11 @@ const deduplicationService = new DeduplicationService(fingerprintService, cache)
 
 const aiProvider = new GeminiProvider();
 
-const matchingService = new MatchingService(aiProvider);
+const matchingService = new MatchingService(
+  aiProvider,
+  cache,
+  fingerprintService,
+)
 
 const telegramNotificationService = new TelegramNotificationService(bot.api);
 

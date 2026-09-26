@@ -1,13 +1,22 @@
 export const cacheKeys = {
   job: (fingerprint: string) => `job:${fingerprint}`,
 
+  jobAnalysis: (fingerprint: string) =>
+    `job:analysis:${fingerprint}`,
+
   jobs: (query: string) => `jobs:${query}`,
 
-  preferences: (userId: string) => `preferences:${userId}`,
+  preferences: (userId: string) =>
+    `preferences:${userId}`,
 
-  fingerprint: (fingerprint: string) => `fingerprint:${fingerprint}`,
+  fingerprint: (fingerprint: string) =>
+    `fingerprint:${fingerprint}`,
 
-  subscriptionStatus: (userId: string) => `subscription:${userId}`,
+  subscriptionStatus: (userId: string) =>
+    `subscription:${userId}`,
 
-  userSentJob: (userId: string | number, fingerprint: string) => `user:${userId}:sent:${fingerprint}`,
+  userSentJob: (
+    userId: string | number,
+    fingerprint: string,
+  ) => `user:${userId}:sent:${fingerprint}`,
 };
