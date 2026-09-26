@@ -36,9 +36,14 @@ main().catch(async (error) => {
     if (redisClient.isOpen) {
       await redisClient.quit();
     }
-  } catch {
-    
+  } catch (quitError) {
+    logger.warn(
+      `Failed to close Redis connection during exit: ${
+        quitError instanceof Error ? quitError.message : String(quitError)
+      }`,
+    );
   }
+
 
   process.exit(1);
 });
