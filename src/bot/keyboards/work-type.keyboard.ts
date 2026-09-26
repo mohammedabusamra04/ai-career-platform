@@ -6,3 +6,5 @@ export const workTypeKeyboard = new InlineKeyboard()
   .row()
   .text('On-site', 'work-type:on-site')
   .text('Any', 'work-type:any');
+
+

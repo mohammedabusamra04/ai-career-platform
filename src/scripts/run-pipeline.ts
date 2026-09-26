@@ -3,10 +3,7 @@ import redisClient from '../config/redis.js';
 import { jobPipelineService } from '../config/services.js';
 import logger from '../shared/utils/logger.js';
 
-/**
- * One-shot pipeline runner for GitHub Actions (same idea as Daily_Jobs_Bot agent.js).
- * Collects jobs, matches, and notifies subscribed Telegram users, then exits.
- */
+
 async function main(): Promise<void> {
   logger.info('Daily job pipeline started');
 
@@ -39,9 +36,14 @@ main().catch(async (error) => {
     if (redisClient.isOpen) {
       await redisClient.quit();
     }
-  } catch {
-    // ignore disconnect errors on failure path
+  } catch (quitError) {
+    logger.warn(
+      `Failed to close Redis connection during exit: ${
+        quitError instanceof Error ? quitError.message : String(quitError)
+      }`,
+    );
   }
+
 
   process.exit(1);
 });

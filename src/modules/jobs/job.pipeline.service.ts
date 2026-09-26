@@ -4,12 +4,21 @@ import { CACHE_TTL } from '../../cache/cache.ttl.js';
 import env from '../../config/env.js';
 import logger from '../../shared/utils/logger.js';
 
-import type { Job, JobSearchQuery } from './job.types.js';
+import type {
+  Job,
+  JobSearchQuery,
+} from './job.types.js';
+
 import type { MatchedJob } from '../matching/matching.service.js';
+
 import type { UserPreferences } from '../preferences/preference.types.js';
 
+import type { JobAnalysis } from '../matching/matching.types.js';
+
 interface JobCollector {
-  collectJobs(query: JobSearchQuery): Promise<Job[]>;
+  collectJobs(
+    query: JobSearchQuery,
+  ): Promise<Job[]>;
 }
 
 interface JobDeduplicator {
@@ -29,18 +38,32 @@ interface SubscriptionReader {
 }
 
 interface PreferenceReader {
-  getPreferences(userId: number): Promise<UserPreferences | null>;
+  getPreferences(
+    userId: number,
+  ): Promise<UserPreferences | null>;
 }
 
 interface JobMatcher {
-  matchJobs(jobs: Job[], preferences: UserPreferences): Promise<MatchedJob[]>;
+  analyzeJobs(
+    jobs: Job[],
+  ): Promise<Map<string, JobAnalysis>>;
+
+  matchJobs(
+    jobs: Job[],
+    preferences: UserPreferences,
+    analyses: Map<string, JobAnalysis>,
+  ): Promise<MatchedJob[]>;
 }
 
 interface JobNotifier {
-  sendJobs(chatId: number, matchedJobs: MatchedJob[]): Promise<void>;
+  sendJobs(
+    chatId: number,
+    matchedJobs: MatchedJob[],
+  ): Promise<void>;
 }
 
-const MINIMUM_MATCH_SCORE = env.minMatchScore;
+const MINIMUM_MATCH_SCORE =
+  env.minMatchScore;
 
 export interface PipelineRunResult {
   subscribers: number;
@@ -62,8 +85,17 @@ export interface LastPipelineStats {
   totalJobsCollected: number;
 }
 
+type UserOutcome =
+  | 'sent_jobs'
+  | 'no_match'
+  | 'skipped_no_preferences'
+  | 'skipped'
+  | 'error';
+
 export class JobPipelineService {
-  private lastStats: LastPipelineStats | null = null;
+  private lastStats:
+    | LastPipelineStats
+    | null = null;
 
   constructor(
     private readonly jobCollectionService: JobCollector,
@@ -81,158 +113,674 @@ export class JobPipelineService {
   }
 
   async run(): Promise<PipelineRunResult> {
-    const subscribers = await this.subscriptionService.getSubscribedUsers();
-    logger.info(`Job pipeline started. Found ${subscribers.length} subscribed users.`);
+    const subscribers =
+      await this.subscriptionService.getSubscribedUsers();
+
+    logger.info(
+      `Job pipeline started. Found ${subscribers.length} subscribed users.`,
+    );
 
     const result: PipelineRunResult = {
-      subscribers: subscribers.length,
-      processed: 0,
-      notifiedWithJobs: 0,
-      notifiedNoMatch: 0,
-      skippedNoPreferences: 0,
-      errors: 0,
-      totalJobsCollected: 0,
-    };
+  subscribers: subscribers.length,
+  processed: subscribers.length,
+  notifiedWithJobs: 0,
+  notifiedNoMatch: 0,
+  skippedNoPreferences: 0,
+  errors: 0,
+  totalJobsCollected: 0,
+};
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 1
+     * Load preferences and collect jobs for every user.
+     * ---------------------------------------------------------
+     */
+
+    const userPreferences =
+      new Map<number, UserPreferences>();
+
+    const userJobs =
+      new Map<number, Job[]>();
+
+    /*
+     * All unique jobs across ALL users.
+     *
+     * Key:
+     *   fingerprint
+     *
+     * Value:
+     *   Job
+     *
+     * Average lookup/insertion:
+     *   O(1)
+     */
+    const uniqueJobsMap =
+      new Map<string, Job>();
 
     for (const userId of subscribers) {
-      const outcome = await this.runForUser(userId);
-      result.processed += 1;
+      try {
+        const isSubscribed =
+          await this.subscriptionService.isSubscribed(
+            userId,
+          );
 
-      if (outcome === 'sent_jobs') {
-        result.notifiedWithJobs += 1;
-      } else if (outcome === 'no_match') {
-        result.notifiedNoMatch += 1;
-      } else if (outcome === 'skipped_no_preferences') {
-        result.skippedNoPreferences += 1;
-      } else if (outcome === 'error') {
+        if (!isSubscribed) {
+          logger.info(
+            `User ${userId} is not subscribed. Skipping.`,
+          );
+
+          continue;
+        }
+
+        const preferences =
+          await this.preferenceService.getPreferences(
+            userId,
+          );
+
+        if (!preferences) {
+          logger.info(
+            `User ${userId} has no saved preferences. Skipping.`,
+          );
+
+          result.skippedNoPreferences += 1;
+          
+
+          continue;
+        }
+
+        userPreferences.set(
+          userId,
+          preferences,
+        );
+
+        const jobs =
+          await this.jobCollectionService.collectJobs({
+            jobTitle: preferences.jobTitle,
+            workType: preferences.workType,
+            experienceLevel:
+              preferences.experienceLevel,
+            location: preferences.location,
+            skills: preferences.skills,
+          });
+
+        result.totalJobsCollected +=
+          jobs.length;
+
+        if (jobs.length === 0) {
+          userJobs.set(userId, []);
+
+          logger.info(
+            `No jobs collected for user ${userId}.`,
+          );
+
+          continue;
+        }
+
+        /*
+         * Deduplicate jobs for this user.
+         */
+        const { uniqueJobs } =
+          await this.deduplicationService.deduplicate(
+            jobs,
+          );
+
+        userJobs.set(
+          userId,
+          uniqueJobs,
+        );
+
+        /*
+         * Add the jobs to the global Map.
+         *
+         * If another user already collected the same job,
+         * Map.set() is avoided.
+         */
+        for (const job of uniqueJobs) {
+          const fingerprint =
+            this.fingerprintService.generate(job);
+
+          if (!uniqueJobsMap.has(fingerprint)) {
+            uniqueJobsMap.set(
+              fingerprint,
+              job,
+            );
+          }
+        }
+      } catch (error) {
         result.errors += 1;
+        
+
+        logger.error(
+          `Failed to collect jobs for user ${userId}: ${
+            error instanceof Error
+              ? error.message
+              : String(error)
+          }`,
+        );
+      }
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 2
+     * Convert the Map into an array.
+     *
+     * We need an array because:
+     * - cacheJobs expects an array
+     * - analyzeJobs expects an array
+     *
+     * At this point every job is globally unique.
+     * ---------------------------------------------------------
+     */
+
+    const allUniqueJobs =
+      Array.from(uniqueJobsMap.values());
+
+    logger.info(
+      `Collected ${result.totalJobsCollected} jobs. Found ${allUniqueJobs.length} unique jobs across all users.`,
+    );
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 3
+     * Cache jobs.
+     * ---------------------------------------------------------
+     */
+
+    if (allUniqueJobs.length > 0) {
+      await this.cacheJobs(
+        allUniqueJobs,
+      );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 4
+     * Analyze each unique job ONLY ONCE.
+     *
+     * This is the important architectural change.
+     *
+     * Example:
+     *
+     * 100 jobs × 3 users
+     *
+     * Before:
+     * 300 possible AI analyses
+     *
+     * Now:
+     * 100 analyses maximum.
+     * ---------------------------------------------------------
+     */
+
+    let analyses =
+      new Map<string, JobAnalysis>();
+
+    if (allUniqueJobs.length > 0) {
+      analyses =
+        await this.matchingService.analyzeJobs(
+          allUniqueJobs,
+        );
+    }
+
+    logger.info(
+      `AI analysis completed. ${analyses.size}/${allUniqueJobs.length} jobs have analysis data.`,
+    );
+
+    /*
+     * ---------------------------------------------------------
+     * STEP 5
+     * Process each user using the SAME analysis Map.
+     * ---------------------------------------------------------
+     */
+
+    for (const userId of subscribers) {
+      /*
+       * User had no preferences or collection failed.
+       */
+      const preferences =
+        userPreferences.get(userId);
+
+      if (!preferences) {
+        /*
+         * If we already counted this user as processed
+         * because of missing preferences, do not count twice.
+         */
+        if (!userJobs.has(userId)) {
+          continue;
+        }
+
+        continue;
+      }
+
+
+      try {
+        const jobs =
+          userJobs.get(userId) ?? [];
+
+        if (jobs.length === 0) {
+          logger.info(
+            `No jobs available for user ${userId}. Sending no-match notification.`,
+          );
+
+          await this.notificationService.sendJobs(
+            userId,
+            [],
+          );
+
+          result.notifiedNoMatch += 1;
+
+          continue;
+        }
+
+        /*
+         * Match locally.
+         *
+         * No Gemini request happens here.
+         *
+         * We only use the already-created analysis Map.
+         */
+        const matchedJobs =
+          await this.matchingService.matchJobs(
+            jobs,
+            preferences,
+            analyses,
+          );
+
+        const qualityMatches =
+          matchedJobs.filter(
+            (matchedJob) =>
+              matchedJob.score >=
+              MINIMUM_MATCH_SCORE,
+          );
+
+        if (qualityMatches.length === 0) {
+          logger.info(
+            `No matches met the minimum score (${MINIMUM_MATCH_SCORE}) for user ${userId}. Sending no-match notification.`,
+          );
+
+          await this.notificationService.sendJobs(
+            userId,
+            [],
+          );
+
+          result.notifiedNoMatch += 1;
+
+          continue;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Check which jobs were already sent.
+         *
+         * We use Promise.all so Redis checks happen in parallel.
+         * -----------------------------------------------------
+         */
+
+        const sentChecks =
+          await Promise.all(
+            qualityMatches.map(
+              async (match) => {
+                const fingerprint =
+                  this.fingerprintService.generate(
+                    match.job,
+                  );
+
+                const sentKey =
+                  cacheKeys.userSentJob(
+                    userId,
+                    fingerprint,
+                  );
+
+                const alreadySent =
+                  await this.cache.get(
+                    sentKey,
+                  );
+
+                return {
+                  match,
+                  fingerprint,
+                  alreadySent:
+                    alreadySent !== null &&
+                    alreadySent !== undefined,
+                };
+              },
+            ),
+          );
+
+        /*
+         * Set gives O(1) average lookup if we ever
+         * need to check these fingerprints again.
+         */
+        const sentFingerprints =
+          new Set<string>();
+
+        for (const item of sentChecks) {
+          if (item.alreadySent) {
+            sentFingerprints.add(
+              item.fingerprint,
+            );
+          }
+        }
+
+        const unsentMatches =
+          sentChecks
+            .filter(
+              (item) =>
+                !sentFingerprints.has(
+                  item.fingerprint,
+                ),
+            )
+            .map(
+              (item) => item.match,
+            );
+
+        if (unsentMatches.length === 0) {
+          logger.info(
+            `All ${qualityMatches.length} matching jobs were already sent to user ${userId} previously.`,
+          );
+
+          result.notifiedNoMatch += 1;
+
+          continue;
+        }
+
+        logger.info(
+          `Sending ${unsentMatches.length} new matched jobs to user ${userId}.`,
+        );
+
+        await this.notificationService.sendJobs(
+          userId,
+          unsentMatches,
+        );
+
+        /*
+         * Record sent jobs in Redis.
+         */
+        await Promise.all(
+          unsentMatches.map(
+            async (match) => {
+              const fingerprint =
+                this.fingerprintService.generate(
+                  match.job,
+                );
+
+              const sentKey =
+                cacheKeys.userSentJob(
+                  userId,
+                  fingerprint,
+                );
+
+              await this.cache.set(
+                sentKey,
+                {
+                  sentAt:
+                    new Date().toISOString(),
+                  jobTitle:
+                    match.job.title,
+                  company:
+                    match.job.company,
+                },
+                CACHE_TTL.SENT_JOB,
+              );
+            },
+          ),
+        );
+
+        result.notifiedWithJobs += 1;
+      } catch (error) {
+        result.errors += 1;
+
+        logger.error(
+          `Failed to process user ${userId}: ${
+            error instanceof Error
+              ? error.message
+              : String(error)
+          }`,
+        );
       }
     }
 
     this.lastStats = {
       lastRunAt: new Date(),
       subscribers: result.subscribers,
-      notifiedWithJobs: result.notifiedWithJobs,
-      notifiedNoMatch: result.notifiedNoMatch,
-      skippedNoPreferences: result.skippedNoPreferences,
+      notifiedWithJobs:
+        result.notifiedWithJobs,
+      notifiedNoMatch:
+        result.notifiedNoMatch,
+      skippedNoPreferences:
+        result.skippedNoPreferences,
       errors: result.errors,
-      totalJobsCollected: result.totalJobsCollected,
+      totalJobsCollected:
+        result.totalJobsCollected,
     };
 
     logger.info(
-      `Job pipeline finished. subscribers=${result.subscribers}, withJobs=${result.notifiedWithJobs}, noMatch=${result.notifiedNoMatch}, skippedNoPrefs=${result.skippedNoPreferences}, errors=${result.errors}`,
+      `Job pipeline finished. subscribers=${result.subscribers}, processed=${result.processed}, notifiedWithJobs=${result.notifiedWithJobs}, notifiedNoMatch=${result.notifiedNoMatch}, skippedNoPrefs=${result.skippedNoPreferences}, errors=${result.errors}, totalJobsCollected=${result.totalJobsCollected}`,
     );
 
     return result;
   }
 
+  /*
+   * Kept as a public-ish helper because it may still be useful
+   * for manual processing/testing.
+   */
   async runForUser(
     userId: number,
-  ): Promise<'sent_jobs' | 'no_match' | 'skipped_no_preferences' | 'skipped' | 'error'> {
+  ): Promise<UserOutcome> {
     try {
-      const isSubscribed = await this.subscriptionService.isSubscribed(userId);
+      const isSubscribed =
+        await this.subscriptionService.isSubscribed(
+          userId,
+        );
 
       if (!isSubscribed) {
-        logger.info(`User ${userId} is not subscribed. Skipping.`);
+        logger.info(
+          `User ${userId} is not subscribed. Skipping.`,
+        );
+
         return 'skipped';
       }
 
-      const preferences = await this.preferenceService.getPreferences(userId);
+      const preferences =
+        await this.preferenceService.getPreferences(
+          userId,
+        );
 
       if (!preferences) {
-        logger.info(`User ${userId} has no saved preferences. Skipping.`);
+        logger.info(
+          `User ${userId} has no saved preferences. Skipping.`,
+        );
+
         return 'skipped_no_preferences';
       }
 
-      const jobs = await this.jobCollectionService.collectJobs({
-        jobTitle: preferences.jobTitle,
-        workType: preferences.workType,
-        experienceLevel: preferences.experienceLevel,
-        location: preferences.location,
-        skills: preferences.skills,
-      });
+      /*
+       * This method is kept for compatibility.
+       *
+       * The main scheduled pipeline should use run(),
+       * because run() performs global job analysis once.
+       */
+
+      const jobs =
+        await this.jobCollectionService.collectJobs({
+          jobTitle: preferences.jobTitle,
+          workType: preferences.workType,
+          experienceLevel:
+            preferences.experienceLevel,
+          location: preferences.location,
+          skills: preferences.skills,
+        });
 
       if (jobs.length === 0) {
-        logger.info(`No jobs collected for user ${userId}. Sending no-match notification.`);
-        await this.notificationService.sendJobs(userId, []);
+        await this.notificationService.sendJobs(
+          userId,
+          [],
+        );
+
         return 'no_match';
       }
 
-      const { uniqueJobs } = await this.deduplicationService.deduplicate(jobs);
+      const {
+        uniqueJobs,
+      } =
+        await this.deduplicationService.deduplicate(
+          jobs,
+        );
 
       if (uniqueJobs.length === 0) {
-        logger.info(
-          `All ${jobs.length} collected jobs are duplicates for user ${userId}. Sending no-match notification.`,
+        await this.notificationService.sendJobs(
+          userId,
+          [],
         );
-        await this.notificationService.sendJobs(userId, []);
+
         return 'no_match';
       }
 
-      await this.cacheJobs(uniqueJobs);
-
-      const matchedJobs = await this.matchingService.matchJobs(uniqueJobs, preferences);
-
-      const qualityMatches = matchedJobs.filter(
-        (matchedJob) => matchedJob.score >= MINIMUM_MATCH_SCORE,
+      await this.cacheJobs(
+        uniqueJobs,
       );
 
-      if (qualityMatches.length === 0) {
-        logger.info(
-          `No matches met the minimum score (${MINIMUM_MATCH_SCORE}) for user ${userId}. Sending no-match notification.`,
+      const analyses =
+        await this.matchingService.analyzeJobs(
+          uniqueJobs,
         );
-        await this.notificationService.sendJobs(userId, []);
+
+      const matchedJobs =
+        await this.matchingService.matchJobs(
+          uniqueJobs,
+          preferences,
+          analyses,
+        );
+
+      const qualityMatches =
+        matchedJobs.filter(
+          (matchedJob) =>
+            matchedJob.score >=
+            MINIMUM_MATCH_SCORE,
+        );
+
+      if (qualityMatches.length === 0) {
+        await this.notificationService.sendJobs(
+          userId,
+          [],
+        );
+
         return 'no_match';
       }
 
-      // Filter out jobs that have already been sent to this user in previous runs
-      const unsentMatches: MatchedJob[] = [];
-      for (const match of qualityMatches) {
-        const fingerprint = this.fingerprintService.generate(match.job);
-        const sentKey = cacheKeys.userSentJob(userId, fingerprint);
-        const alreadySent = await this.cache.get(sentKey);
+      const sentChecks =
+        await Promise.all(
+          qualityMatches.map(
+            async (match) => {
+              const fingerprint =
+                this.fingerprintService.generate(
+                  match.job,
+                );
 
-        if (!alreadySent) {
-          unsentMatches.push(match);
-        }
-      }
+              const sentKey =
+                cacheKeys.userSentJob(
+                  userId,
+                  fingerprint,
+                );
+
+              const alreadySent =
+                await this.cache.get(
+                  sentKey,
+                );
+
+              return {
+                match,
+                fingerprint,
+                alreadySent:
+                  alreadySent !== null &&
+                  alreadySent !== undefined,
+              };
+            },
+          ),
+        );
+
+      const unsentMatches =
+        sentChecks
+          .filter(
+            (item) => !item.alreadySent,
+          )
+          .map(
+            (item) => item.match,
+          );
 
       if (unsentMatches.length === 0) {
-        logger.info(
-          `All ${qualityMatches.length} matching jobs were already sent to user ${userId} previously.`,
-        );
         return 'no_match';
       }
 
-      logger.info(`Sending ${unsentMatches.length} new matched jobs to user ${userId}.`);
-      await this.notificationService.sendJobs(userId, unsentMatches);
+      await this.notificationService.sendJobs(
+        userId,
+        unsentMatches,
+      );
 
-      // Record sent jobs in Redis with 30-day TTL to prevent duplicate notifications
-      for (const match of unsentMatches) {
-        const fingerprint = this.fingerprintService.generate(match.job);
-        const sentKey = cacheKeys.userSentJob(userId, fingerprint);
-        await this.cache.set(
-          sentKey,
-          {
-            sentAt: new Date().toISOString(),
-            jobTitle: match.job.title,
-            company: match.job.company,
+      await Promise.all(
+        unsentMatches.map(
+          async (match) => {
+            const fingerprint =
+              this.fingerprintService.generate(
+                match.job,
+              );
+
+            const sentKey =
+              cacheKeys.userSentJob(
+                userId,
+                fingerprint,
+              );
+
+            await this.cache.set(
+              sentKey,
+              {
+                sentAt:
+                  new Date().toISOString(),
+                jobTitle:
+                  match.job.title,
+                company:
+                  match.job.company,
+              },
+              CACHE_TTL.SENT_JOB,
+            );
           },
-          CACHE_TTL.SENT_JOB,
-        );
-      }
+        ),
+      );
 
       return 'sent_jobs';
     } catch (error) {
-      console.error(`Failed to process job pipeline for user ${userId}:`, error);
+      logger.error(
+        `Failed to process job pipeline for user ${userId}: ${
+          error instanceof Error
+            ? error.message
+            : String(error)
+        }`,
+      );
+
       return 'error';
     }
   }
 
-  private async cacheJobs(jobs: Job[]): Promise<void> {
-    for (const job of jobs) {
-      const fingerprint = this.fingerprintService.generate(job);
+  private async cacheJobs(
+    jobs: Job[],
+  ): Promise<void> {
+    await Promise.all(
+      jobs.map(
+        async (job) => {
+          const fingerprint =
+            this.fingerprintService.generate(
+              job,
+            );
 
-      await this.cache.set(cacheKeys.job(fingerprint), job, CACHE_TTL.JOB);
-    }
+          await this.cache.set(
+            cacheKeys.job(fingerprint),
+            job,
+            CACHE_TTL.JOB,
+          );
+        },
+      ),
+    );
   }
 }

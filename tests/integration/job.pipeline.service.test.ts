@@ -60,6 +60,7 @@ describe('JobPipelineService', () => {
     };
 
     const matchingService = {
+      analyzeJobs: vi.fn().mockResolvedValue(new Map()),
       matchJobs: vi.fn(),
     };
 
@@ -126,7 +127,8 @@ describe('JobPipelineService', () => {
     expect(subscriptionService.isSubscribed).toHaveBeenCalledWith(123);
     expect(preferenceService.getPreferences).toHaveBeenCalledWith(123);
     expect(deduplicationService.deduplicate).toHaveBeenCalledWith([testJob]);
-    expect(matchingService.matchJobs).toHaveBeenCalledWith([testJob], preferences);
+    expect(matchingService.analyzeJobs).toHaveBeenCalledWith([testJob]);
+    expect(matchingService.matchJobs).toHaveBeenCalledWith([testJob], preferences, expect.any(Map));
     expect(notificationService.sendJobs).toHaveBeenCalledWith(123, [matchedJob]);
     expect(cache.set).toHaveBeenCalledWith(
       'user:123:sent:test-fingerprint',

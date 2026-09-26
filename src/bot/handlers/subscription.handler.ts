@@ -36,7 +36,7 @@ export function registerSubscriptionHandler(bot: Bot<BotContext>): void {
     );
   });
 
-  bot.command('subscription', async (ctx) => {
+  const handleSubscriptionStatus = async (ctx: BotContext) => {
     const userId = ctx.from?.id;
 
     if (!userId) {
@@ -59,5 +59,15 @@ export function registerSubscriptionHandler(bot: Bot<BotContext>): void {
       '🔕 You are currently unsubscribed from job alerts.\n\n' +
         'Use /subscribe to start receiving notifications.',
     );
-  });
+  };
+
+  bot.command('subscription', handleSubscriptionStatus);
+
+  if (typeof bot.hears === 'function') {
+    bot.hears(
+      ['🔔 Subscription Status', 'Subscription Status', 'Subscription'],
+      handleSubscriptionStatus,
+    );
+  }
 }
+
