@@ -320,11 +320,11 @@ Required secret for `keep-alive.yml`: `RENDER_APP_URL`.
 
 **Preference setup flow** — guided questions, review, and confirmation:
 
-![Preference setup flow](./screenshots/preferences-setup.jpg)
+![Preference setup flow](./ef2be6e6-d944-439b-8b04-2a39547f6547.jpeg)
 
 **Matched job notifications** — sent with source and match score, plus an Apply button:
 
-![Job match notifications](./screenshots/job-matches.jpg)
+![Job match notifications](./81072371-d4d2-4028-8f63-089628c3ceef.jpeg)
 
 ## Roadmap
 
