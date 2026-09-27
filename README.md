@@ -11,6 +11,7 @@ A Telegram bot that finds job postings across 10+ free job boards, uses **Gemini
 ## Table of Contents
 
 - [Overview](#overview)
+- [Development Process & AI Usage](#development-process--ai-usage)
 - [Architecture](#architecture)
 - [Features](#features)
 - [Setup](#setup)
@@ -38,6 +39,10 @@ A user opens the Telegram bot, answers a few questions (desired role, work type,
 5. Sends only jobs that clear the minimum match score **and** haven't already been sent to that user.
 
 The pipeline can be triggered by an internal scheduler running inside the long-lived server process, by a scheduled GitHub Actions workflow hitting an authenticated HTTP endpoint, or by a standalone CLI script — see [GitHub Actions](#github-actions).
+
+## Development Process & AI Usage
+
+AI tools were used during development to speed up execution of routine, well-defined tasks (e.g. boilerplate, repetitive edits). However, the planning and problem-solving were entirely my own: I defined the architecture, broke down the work into issues, and decided how the codebase should be structured and segmented into files and modules. AI served strictly as an execution aid, not as a source of design or engineering decisions.
 
 ## Architecture
 
