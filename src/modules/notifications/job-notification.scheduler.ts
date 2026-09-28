@@ -31,6 +31,13 @@ export class JobNotificationScheduler {
   ) {}
 
   start(): void {
+    // Kill switch: set ENABLE_SCHEDULER=false (e.g. on Render) to keep the bot
+    // alive without sending scheduled jobs. GitHub Actions stays the only sender.
+    if (process.env.ENABLE_SCHEDULER === 'false') {
+      logger.info('JobNotificationScheduler disabled (ENABLE_SCHEDULER=false)');
+      return;
+    }
+
     if (this.isRunning) {
       return;
     }
