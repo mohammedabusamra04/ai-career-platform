@@ -13,4 +13,5 @@ export interface AIProvider {
   ): Promise<JobAnalysisResult>;
 
   hasAvailableSlot(): boolean;
+  msUntilAvailable?(): number;
 }
