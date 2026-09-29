@@ -3,7 +3,7 @@ name: Scheduled Job Pipeline
 on:
   schedule:
     # Runs twice daily at 06:00 and 15:00 UTC (equivalent to 09:00 and 18:00 UTC+3 / Asia/Gaza)
-    - cron: '0 6,15 * * *'
+    - cron: '0 3,12 * * *'
   workflow_dispatch:
     # Allows manual triggering from GitHub Actions tab anytime
 
@@ -32,7 +32,7 @@ jobs:
           PORT: 3000
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}          
           JOB_RUN_TIME_1: ${{ secrets.JOB_RUN_TIME_1 || '09:00' }}
           JOB_RUN_TIME_2: ${{ secrets.JOB_RUN_TIME_2 || '18:00' }}
           TIMEZONE: ${{ secrets.TIMEZONE || 'Asia/Gaza' }}
