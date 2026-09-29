@@ -65,6 +65,7 @@ export class GeminiProvider implements AIProvider {
    */
   private readonly modelNames: string[] = [
     'gemini-3.6-flash',
+    'gemini-3.8-flash',
   ];
 
   /**
@@ -392,6 +393,17 @@ Rules:
     const circuit = this.circuits.get(circuitKey);
     return !circuit || Date.now() >= circuit.unavailableUntil;
   }
+
+  msUntilAvailable(): number {
+  const now = Date.now();
+  return Math.min(
+    ...this.slots.map((s) => {
+      const c = this.circuits.get(this.circuitKey(s));
+      return c ? Math.max(0, c.unavailableUntil - now) : 0;
+    }),
+  );
+}
+
   public hasAvailableSlot(): boolean {
     return this.slots.some((slot) =>
       this.isAvailable(this.circuitKey(slot)),
@@ -679,4 +691,4 @@ Rules:
       summary: result.summary,
     };
   }
-}
+}
