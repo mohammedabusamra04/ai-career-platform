@@ -35,7 +35,8 @@ export class MatchingService {
     jobs: Job[],
   ): Promise<Map<string, JobAnalysis>> {
     const analyses = new Map<string, JobAnalysis>();
-
+    let totalWaited = 0;
+    const MAX_WAIT = 300_000; // 5 minutes
     for (const job of jobs) {
       const fingerprint =
         this.fingerprintService.generate(job);
@@ -68,12 +69,20 @@ export class MatchingService {
        * are currently unavailable.
        */
       if (!this.aiProvider.hasAvailableSlot()) {
+       const wait = this.aiProvider.msUntilAvailable?.() ?? 0;
+
+     if (wait > 0 && wait <= 120_000 && totalWaited < MAX_WAIT) {
+         await new Promise((r) => setTimeout(r, wait));
+         totalWaited += wait;
+      }
+
+     if (!this.aiProvider.hasAvailableSlot()) {
         logger.warn(
           `Skipping AI analysis for "${job.title}" because all Gemini slots are unavailable.`,
         );
-
         continue;
       }
+}
 
       try {
         const result =
