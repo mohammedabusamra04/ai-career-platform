@@ -2,8 +2,10 @@ name: Scheduled Job Pipeline
 
 on:
   schedule:
-    # Runs twice daily at 06:00 and 15:00 UTC (equivalent to 09:00 and 18:00 UTC+3 / Asia/Gaza)
-    - cron: '0 3,12 * * *'
+    # Target: 09:00 and 21:00 Asia/Gaza. GitHub cron is UTC-only and Gaza switches
+    # between UTC+2 and UTC+3 (DST), so we trigger at both possible UTC hours.
+    # The pipeline script skips triggers outside the Gaza notification window.
+    - cron: '0 6,7,18,19 * * *'
   workflow_dispatch:
     # Allows manual triggering from GitHub Actions tab anytime
 
@@ -34,7 +36,7 @@ jobs:
           REDIS_URL: ${{ secrets.REDIS_URL }}
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}          
           JOB_RUN_TIME_1: ${{ secrets.JOB_RUN_TIME_1 || '09:00' }}
-          JOB_RUN_TIME_2: ${{ secrets.JOB_RUN_TIME_2 || '18:00' }}
+          JOB_RUN_TIME_2: ${{ secrets.JOB_RUN_TIME_2 || '21:00' }}
           TIMEZONE: ${{ secrets.TIMEZONE || 'Asia/Gaza' }}
           ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
@@ -43,4 +45,5 @@ jobs:
           FIRECRAWL_API_KEY: ${{ secrets.FIRECRAWL_API_KEY }}
           MIN_MATCH_SCORE: ${{ secrets.MIN_MATCH_SCORE || '40' }}
           API_BEARER_TOKEN: ${{ secrets.API_BEARER_TOKEN }}
+          FORCE_RUN: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: npm run pipeline:run
