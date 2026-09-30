@@ -18,6 +18,11 @@ interface JobFingerprinter {
   generate(job: Job): string;
 }
 
+/** Max parallel Gemini analyses per pipeline run. */
+const ANALYSIS_CONCURRENCY = 4;
+/** Hard cap on total time spent waiting for AI analysis (ms). */
+const ANALYSIS_BUDGET_MS = 6 * 60_000;
+
 export class MatchingService {
   private readonly fingerprintService: JobFingerprinter;
 
@@ -31,96 +36,83 @@ export class MatchingService {
     };
   }
 
-  async analyzeJobs(
-    jobs: Job[],
-  ): Promise<Map<string, JobAnalysis>> {
+  async analyzeJobs(jobs: Job[]): Promise<Map<string, JobAnalysis>> {
     const analyses = new Map<string, JobAnalysis>();
-    let totalWaited = 0;
-    const MAX_WAIT = 300_000; // 5 minutes
-    for (const job of jobs) {
-      const fingerprint =
-        this.fingerprintService.generate(job);
+    const deadline = Date.now() + ANALYSIS_BUDGET_MS;
+    let cursor = 0;
+    let skipped = 0;
 
-      const analysisKey =
-        cacheKeys.jobAnalysis(fingerprint);
+    const worker = async (): Promise<void> => {
+      while (cursor < jobs.length) {
+        const job = jobs[cursor++];
+        const fingerprint = this.fingerprintService.generate(job);
+        const analysisKey = cacheKeys.jobAnalysis(fingerprint);
 
-      /*
-       * Redis first.
-       *
-       * If another pipeline run already analyzed this job,
-       * reuse the cached result.
-       */
-      const cached = this.cache
-        ? await this.cache.get<JobAnalysis>(analysisKey)
-        : null;
+        /*
+         * Redis first: reuse analyses from previous pipeline runs.
+         */
+        const cached = this.cache
+          ? await this.cache.get<JobAnalysis>(analysisKey)
+          : null;
 
-      if (cached) {
-        analyses.set(fingerprint, cached);
-
-        logger.info(
-          `Using cached AI analysis for job "${job.title}".`,
-        );
-
-        continue;
-      }
-
-      /*
-       * Do not call Gemini if all API-key/model slots
-       * are currently unavailable.
-       */
-      if (!this.aiProvider.hasAvailableSlot()) {
-       const wait = this.aiProvider.msUntilAvailable?.() ?? 0;
-
-     if (wait > 0 && wait <= 120_000 && totalWaited < MAX_WAIT) {
-         await new Promise((r) => setTimeout(r, wait));
-         totalWaited += wait;
-      }
-
-     if (!this.aiProvider.hasAvailableSlot()) {
-        logger.warn(
-          `Skipping AI analysis for "${job.title}" because all Gemini slots are unavailable.`,
-        );
-        continue;
-      }
-}
-
-      try {
-        const result =
-          await this.aiProvider.analyzeJob(job);
-
-        const analysis: JobAnalysis = {
-          role: result.role,
-          level: result.experienceLevel,
-          skills: result.skills,
-          workType: result.workType,
-        };
-
-        if (this.cache) {
-          await this.cache.set(
-            analysisKey,
-            analysis,
-            CACHE_TTL.JOB_ANALYSIS,
-          );
+        if (cached) {
+          analyses.set(fingerprint, cached);
+          continue;
         }
 
-        analyses.set(
-          fingerprint,
-          analysis,
-        );
+        /*
+         * If every API-key/model slot is in cooldown, wait for the
+         * earliest one to reopen, but only if it fits in the time budget.
+         */
+        if (!this.aiProvider.hasAvailableSlot()) {
+          const wait = this.aiProvider.msUntilAvailable?.() ?? 0;
 
-        logger.info(
-          `AI analysis generated for job "${job.title}".`,
-        );
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : String(error);
+          if (wait > 0 && wait <= 120_000 && wait < deadline - Date.now()) {
+            await new Promise((resolve) => setTimeout(resolve, wait));
+          }
+        }
 
-        logger.warn(
-          `Job analysis failed for "${job.title}": ${errorMessage}`,
-        );
+        if (Date.now() >= deadline || !this.aiProvider.hasAvailableSlot()) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          const result = await this.aiProvider.analyzeJob(job);
+
+          const analysis: JobAnalysis = {
+            role: result.role,
+            level: result.experienceLevel,
+            skills: result.skills,
+            workType: result.workType,
+          };
+
+          if (this.cache) {
+            await this.cache.set(analysisKey, analysis, CACHE_TTL.JOB_ANALYSIS);
+          }
+
+          analyses.set(fingerprint, analysis);
+
+          logger.info(`AI analysis generated for job "${job.title}".`);
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+
+          logger.warn(
+            `Job analysis failed for "${job.title}": ${errorMessage}`,
+          );
+        }
       }
+    };
+
+    await Promise.all(
+      Array.from({ length: ANALYSIS_CONCURRENCY }, () => worker()),
+    );
+
+    if (skipped > 0) {
+      logger.warn(
+        `AI analysis budget/slots exhausted: ${skipped}/${jobs.length} jobs will use rule-based matching.`,
+      );
     }
 
     return analyses;
