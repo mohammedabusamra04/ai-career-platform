@@ -36,7 +36,7 @@ const env = {
   geminiApiKeys: resolveGeminiApiKeys(),
   pipelineApiKey: process.env.PIPELINE_API_SECRET || '',
   jobRunTime1: process.env.JOB_RUN_TIME_1 || '09:00',
-  jobRunTime2: process.env.JOB_RUN_TIME_2 || '18:00',
+  jobRunTime2: process.env.JOB_RUN_TIME_2 || '21:00',
   timezone: process.env.TIMEZONE || 'Asia/Gaza',
   adzunaAppId: process.env.ADZUNA_APP_ID || '',
   adzunaAppKey: process.env.ADZUNA_APP_KEY || '',

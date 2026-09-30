@@ -2,10 +2,28 @@ import { connectRedis } from '../config/redis.js';
 import redisClient from '../config/redis.js';
 import { jobPipelineService } from '../config/services.js';
 import logger from '../shared/utils/logger.js';
+import env from '../config/env.js';
+import { NotificationScheduleService } from '../modules/notifications/notification.schedule.js';
 
 
 async function main(): Promise<void> {
   logger.info('Daily job pipeline started');
+
+  const forceRun = process.env.FORCE_RUN === 'true';
+  const scheduleService = new NotificationScheduleService();
+
+  if (
+    !forceRun &&
+    !scheduleService.isWithinRunWindow(env.timezone, [
+      env.jobRunTime1,
+      env.jobRunTime2,
+    ])
+  ) {
+    logger.info(
+      `Outside the notification window for ${env.timezone}; skipping this trigger.`,
+    );
+    process.exit(0);
+  }
 
   await connectRedis();
 
