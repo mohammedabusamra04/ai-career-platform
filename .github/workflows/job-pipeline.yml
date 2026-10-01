@@ -2,10 +2,11 @@ name: Scheduled Job Pipeline
 
 on:
   schedule:
-    # Target: 09:00 and 21:00 Asia/Gaza. GitHub cron is UTC-only and Gaza switches
-    # between UTC+2 and UTC+3 (DST), so we trigger at both possible UTC hours.
-    # The pipeline script skips triggers outside the Gaza notification window.
-    - cron: '0 6,7,18,19 * * *'
+    # Safety net only. GitHub's scheduler can fire hours late, so we trigger hourly
+    # (off the top of the hour) and the pipeline script catches up on any 09:00/21:00
+    # Asia/Gaza slot that was not sent yet. The on-time trigger is an external
+    # scheduler calling workflow_dispatch.
+    - cron: '17 * * * *'
   workflow_dispatch:
     # Allows manual triggering from GitHub Actions tab anytime
 
@@ -34,7 +35,7 @@ jobs:
           PORT: 3000
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
-          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}          
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
           JOB_RUN_TIME_1: ${{ secrets.JOB_RUN_TIME_1 || '09:00' }}
           JOB_RUN_TIME_2: ${{ secrets.JOB_RUN_TIME_2 || '21:00' }}
           TIMEZONE: ${{ secrets.TIMEZONE || 'Asia/Gaza' }}
