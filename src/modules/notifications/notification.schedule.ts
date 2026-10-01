@@ -1,5 +1,12 @@
 import { DateTime } from 'luxon';
 
+export interface DueSlot {
+  /** e.g. 2026-10-01-0900 (local date + slot time) */
+  key: string;
+  /** Minutes elapsed since the slot became due. */
+  lagMinutes: number;
+}
+
 export class NotificationScheduleService {
   getNextNotificationTime(
     timezone: string,
@@ -46,30 +53,50 @@ export class NotificationScheduleService {
   }
 
   /**
-   * True when `now` (in the given timezone) falls inside the window that
-   * starts at one of the notification times. Used to make UTC-only triggers
-   * (GitHub Actions cron) DST-safe and tolerant to start delays.
+   * Returns the most recent notification slot (e.g. 09:00 / 21:00 in the given
+   * timezone) that is already due at `now`, together with how many minutes ago
+   * it was due. Used by the pipeline to "catch up" on a slot when GitHub's cron
+   * fires late, and to dedupe so each slot is only sent once.
    */
-  isWithinRunWindow(
+  getLatestDueSlot(
     timezone: string,
     notificationTimes: string[],
     now: Date = new Date(),
-    windowMinutes = 59,
-  ): boolean {
+  ): DueSlot | null {
     const current = DateTime.fromJSDate(now).setZone(this.getValidTimezone(timezone));
+    let latest: DateTime | null = null;
 
-    return notificationTimes.some((time) => {
-      const [hour, minute] = time.split(':').map(Number);
+    for (const dayOffset of [0, -1]) {
+      for (const time of notificationTimes) {
+        const [hour, minute] = time.split(':').map(Number);
 
-      if (Number.isNaN(hour) || Number.isNaN(minute)) {
-        return false;
+        if (Number.isNaN(hour) || Number.isNaN(minute)) {
+          continue;
+        }
+
+        const slot = current
+          .startOf('day')
+          .plus({ days: dayOffset })
+          .set({ hour, minute });
+
+        if (slot.toMillis() > current.toMillis()) {
+          continue;
+        }
+
+        if (!latest || slot.toMillis() > latest.toMillis()) {
+          latest = slot;
+        }
       }
+    }
 
-      const slot = current.startOf('day').set({ hour, minute });
-      const diffMinutes = current.diff(slot, 'minutes').minutes;
+    if (!latest) {
+      return null;
+    }
 
-      return diffMinutes >= 0 && diffMinutes <= windowMinutes;
-    });
+    return {
+      key: latest.toFormat('yyyy-LL-dd-HHmm'),
+      lagMinutes: Math.floor(current.diff(latest, 'minutes').minutes),
+    };
   }
 
   private getValidTimezone(timezone: string): string {
