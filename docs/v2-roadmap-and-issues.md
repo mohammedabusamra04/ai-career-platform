@@ -51,9 +51,9 @@
 
 ## Milestone M1: PostgreSQL & Scalable Data Layer
 
-### [ISSUE-20] US-0101: Configure PostgreSQL, Prisma & Connection Pool
+### TASK-20: Configure PostgreSQL, Prisma & Connection Pool
 
-#### US-0101a: Prisma Schema Definition & Relational Entities
+#### TASK-20.1: Prisma Schema Definition & Relational Entities
 - **User Story:**
   - *As the system architect,*
   - *I want a complete relational schema defined in Prisma that maps users, preferences, normalized jobs, sent history, and delivery slots with strict constraints and foreign keys,*
@@ -86,7 +86,7 @@
   - Run `prisma migrate dev` on a clean PostgreSQL instance and verify table creation.
   - Unit test verifying repository isolation: domain entities are mapped to/from Prisma models without leaking Prisma types.
 
-#### US-0101b: Connection Pooling, Database Resiliency & Environment Config
+#### TASK-20.2: Connection Pooling, Database Resiliency & Environment Config
 - **User Story:**
   - *As a platform engineer,*
   - *I want robust database connection pooling with retry policies and environment variable validation,*
@@ -105,7 +105,7 @@
   - Concurrency test: execute 50 parallel database reads and verify zero connection leaks or timeout errors.
   - Environment test: verify startup throws an informative error if `DATABASE_URL` is missing or invalid.
 
-#### US-0101c: Scalability B-Tree & Composite Indexes for 10k+ Queries
+#### TASK-20.3: Scalability B-Tree & Composite Indexes for 10k+ Queries
 - **User Story:**
   - *As the database engine,*
   - *I want optimized composite and B-Tree indexes on all frequently filtered columns,*
@@ -124,9 +124,9 @@
 
 ---
 
-### [ISSUE-21] US-0102: Persist Users, State & Preferences
+### TASK-21: Persist Users, State & Preferences
 
-#### US-0102a: User Lifecycle State Machine (Active, Paused, Blocked, Deleted)
+#### TASK-21.1: User Lifecycle State Machine (Active, Paused, Blocked, Deleted)
 - **User Story:**
   - *As the system,*
   - *I want to manage subscriber lifecycles through an explicit state machine with active, paused, blocked, and deleted states,*
@@ -155,7 +155,7 @@
   - Unit tests for all state transitions: Active $\to$ Paused $\to$ Active, Active $\to$ Blocked, Active $\to$ Deleted.
   - Query test: `findActiveRecipients()` must return only users with `status = 'ACTIVE'` or `(status = 'PAUSED' AND pausedUntil <= NOW())`.
 
-#### US-0102b: Preference Validation & Specialization Taxonomy (Max 3 of 10)
+#### TASK-21.2: Preference Validation & Specialization Taxonomy (Max 3 of 10)
 - **User Story:**
   - *As a candidate,*
   - *I want my preferences validated against the 10 approved technical specializations, selecting between 1 and 3 areas,*
@@ -172,7 +172,7 @@
   - Test validation failure when 4 specializations are provided (`length = 4`).
   - Test successful validation for 1, 2, and 3 valid specializations.
 
-#### US-0102c: Equivalence Class Vector Hashing for 10k Scalability
+#### TASK-21.3: Equivalence Class Vector Hashing for 10k Scalability
 - **User Story:**
   - *As the matching engine,*
   - *I want a deterministic hash generated from every user's normalized preference vector,*
@@ -190,9 +190,9 @@
 
 ---
 
-### [ISSUE-22] US-0103: Persist Shared Job Pool
+### TASK-22: Persist Shared Job Pool
 
-#### US-0103a: Central Normalized Job Storage & Atomic Upsert
+#### TASK-22.1: Central Normalized Job Storage & Atomic Upsert
 - **User Story:**
   - *As the central collector,*
   - *I want normalized job postings persisted in a shared pool with atomic upsert operations based on deduplication keys,*
@@ -207,7 +207,7 @@
 - **Test Specifications:**
   - Ingest job A. Verify record created. Ingest job A again with updated description and URL. Verify row updated in place, `lastSeenAt` bumped, and row count unchanged.
 
-#### US-0103b: Active Job Filtering & Status Lifecycle (Active vs Closed)
+#### TASK-22.2: Active Job Filtering & Status Lifecycle (Active vs Closed)
 - **User Story:**
   - *As a job seeker,*
   - *I want stale and closed jobs excluded from my digest and browsing results,*
@@ -222,9 +222,9 @@
 
 ---
 
-### [ISSUE-23] US-0104: Persist Sent-Job History & Feedback
+### TASK-23: Persist Sent-Job History & Feedback
 
-#### US-0104a: High-Throughput Delivery History Storage ($O(1)$ Lookup)
+#### TASK-23.1: High-Throughput Delivery History Storage ($O(1)$ Lookup)
 - **User Story:**
   - *As the delivery engine,*
   - *I want every delivered job recorded in a durable sent history table with $O(1)$ lookup guarantees,*
@@ -238,7 +238,7 @@
 - **Test Specifications:**
   - Record job J1 as sent to user U1. Verify subsequent query excludes J1 for U1, but includes J1 for user U2.
 
-#### US-0104b: User Relevance Feedback Storage (👍 / 👎)
+#### TASK-23.2: User Relevance Feedback Storage (👍 / 👎)
 - **User Story:**
   - *As a user,*
   - *I want to rate recommended jobs with thumbs up or thumbs down buttons,*
@@ -253,9 +253,9 @@
 
 ---
 
-### [ISSUE-24] US-0105 & US-0106: Delivery Attempts Tracking, Data Retention & Backups
+### TASK-24: Delivery Attempts Tracking, Data Retention & Backups
 
-#### US-0105a: Slot-Based Delivery Run State Tracking
+#### TASK-24.1: Slot-Based Delivery Run State Tracking
 - **User Story:**
   - *As an operations engineer,*
   - *I want every twice-daily digest dispatch tracked as a unique DeliverySlot with individual recipient status records,*
@@ -270,7 +270,7 @@
 - **Test Specifications:**
   - Simulate server crash after 30 deliveries out of 100. Restart delivery worker. Verify that the remaining 70 users receive digests, and the first 30 receive 0 duplicate messages.
 
-#### US-0106a: Automated Data Pruning & Retention Lifecycle Policies
+#### TASK-24.2: Automated Data Pruning & Retention Lifecycle Policies
 - **User Story:**
   - *As the system administrator,*
   - *I want automated background retention pruning for old jobs, sent logs, and slot metadata,*
@@ -287,9 +287,9 @@
 
 ## Milestone M2: Central Collection & Shared Job Pool
 
-### [ISSUE-25] US-0301 & US-0302: Standardize Job Source Contract & Adapter Hardening
+### TASK-25: Standardize Job Source Contract & Adapter Hardening
 
-#### US-0302a: Unified JobSource Contract & Error Isolation with Promise.allSettled
+#### TASK-25.1: Unified JobSource Contract & Error Isolation with Promise.allSettled
 - **User Story:**
   - *As the collection engine,*
   - *I want all job sources implementing a standardized `JobSource` interface and executed via `Promise.allSettled`,*
@@ -309,7 +309,7 @@
 - **Test Specifications:**
   - Create 3 mock sources: Source 1 succeeds, Source 2 throws HTTP 500, Source 3 succeeds. Run manager. Verify output contains results from 1 and 3, and failure of 2 is captured safely.
 
-#### US-0302b: Source Fixture Testing & Mock Harness
+#### TASK-25.2: Source Fixture Testing & Mock Harness
 - **User Story:**
   - *As a developer,*
   - *I want comprehensive unit tests for every source adapter using static JSON and HTML fixtures,*
@@ -323,9 +323,9 @@
 
 ---
 
-### [ISSUE-26] US-0303: Independent Scheduled Job Collector
+### TASK-26: Independent Scheduled Job Collector
 
-#### US-0303a: Decoupled Collection Pipeline Engine
+#### TASK-26.1: Decoupled Collection Pipeline Engine
 - **User Story:**
   - *As the platform,*
   - *I want job collection running on an independent, configurable schedule with zero dependency on user interaction,*
@@ -337,7 +337,7 @@
 - **Test Specifications:**
   - Trigger collector endpoint twice concurrently. Verify lock prevents second run from executing simultaneously.
 
-#### US-0303b: Collector Execution Metrics & Telemetry
+#### TASK-26.2: Collector Execution Metrics & Telemetry
 - **User Story:**
   - *As an operations engineer,*
   - *I want rich structured logs and metrics for every collection run,*
@@ -350,9 +350,9 @@
 
 ---
 
-### [ISSUE-27] US-0401: Job Normalization & Sanitization
+### TASK-27: Job Normalization & Sanitization
 
-#### US-0401a: Text Sanitization & Safe HTML Stripping
+#### TASK-27.1: Text Sanitization & Safe HTML Stripping
 - **User Story:**
   - *As the ingestion pipeline,*
   - *I want all job titles, company names, and descriptions stripped of HTML, tracking params, and control characters,*
@@ -366,7 +366,7 @@
   - Input: `<p>Senior Backend <b>Engineer</b> &amp; Team Lead</p>`. Output: `Senior Backend Engineer & Team Lead`.
   - Input: `https://company.com/job?utm_source=adzuna&utm_medium=api`. Output: `https://company.com/job`.
 
-#### US-0401b: Location & Timestamp Standardization
+#### TASK-27.2: Location & Timestamp Standardization
 - **User Story:**
   - *As the ingestion pipeline,*
   - *I want publication dates converted to ISO-8601 UTC and locations normalized into standard formats,*
@@ -380,9 +380,9 @@
 
 ---
 
-### [ISSUE-28] US-0402 & US-0403: Two-Tier Deduplication & Rich Data Merger
+### TASK-28: Two-Tier Deduplication & Rich Data Merger
 
-#### US-0402a: Level 1 SHA-256 Composite Fingerprint Engine
+#### TASK-28.1: Level 1 SHA-256 Composite Fingerprint Engine
 - **User Story:**
   - *As the deduplication engine,*
   - *I want exact duplicate postings identified via a SHA-256 composite fingerprint,*
@@ -395,7 +395,7 @@
 - **Test Specifications:**
   - Verify that varying whitespace or casing produces the identical fingerprint.
 
-#### US-0402b: Level 2 Cross-Source Semantic Fingerprint Engine
+#### TASK-28.2: Level 2 Cross-Source Semantic Fingerprint Engine
 - **User Story:**
   - *As the deduplication engine,*
   - *I want duplicate listings across different job boards detected via semantic title-company hashing,*
@@ -407,7 +407,7 @@
 - **Test Specifications:**
   - Ingest "Senior Backend Engineer" at "Acme Corp" from Source A. Ingest "Sr. Back End Engineer" at "Acme Corp" from Source B. Verify cross-source duplicate detected.
 
-#### US-0403a: Intelligent Field Precedence & Rich Listing Merger
+#### TASK-28.3: Intelligent Field Precedence & Rich Listing Merger
 - **User Story:**
   - *As the deduplication engine,*
   - *I want duplicate listings merged by prioritizing direct ATS links, detailed descriptions, and salary info,*
@@ -422,9 +422,9 @@
 
 ---
 
-### [ISSUE-29] US-0305 & US-0306: Source Throttling & Health Monitor
+### TASK-29: Source Throttling & Health Monitor
 
-#### US-0305a: Circuit Breaker & Exponential Backoff for Source Outages
+#### TASK-29.1: Circuit Breaker & Exponential Backoff for Source Outages
 - **User Story:**
   - *As the collector,*
   - *I want failing or rate-limiting sources protected by circuit breakers and backoff,*
@@ -437,7 +437,7 @@
 - **Test Specifications:**
   - Simulate 3 consecutive 503 errors on Source X. Verify 4th call is skipped immediately.
 
-#### US-0306a: Consecutive Failure Detection & Source Health Telemetry
+#### TASK-29.2: Consecutive Failure Detection & Source Health Telemetry
 - **User Story:**
   - *As the platform maintainer,*
   - *I want automated health monitoring tracking failure streaks and zero-yield runs per source,*
@@ -453,9 +453,9 @@
 
 ## Milestone M3: Deterministic Classification & Remote Scope
 
-### [ISSUE-30] US-0501: Deterministic Specialization Classifier
+### TASK-30: Deterministic Specialization Classifier
 
-#### US-0501a: Title-First Tokenized Rule Engine (Trie / Keyword Sets)
+#### TASK-30.1: Title-First Tokenized Rule Engine (Trie / Keyword Sets)
 - **User Story:**
   - *As the classification engine,*
   - *I want job titles tokenized and matched against deterministic keyword sets for the 10 approved specializations,*
@@ -478,7 +478,7 @@
 - **Test Specifications:**
   - Test suite of 100 benchmark job titles; verify $\ge 90\%$ classified correctly without AI.
 
-#### US-0501b: Explicit Exclusion Negative Matcher
+#### TASK-30.2: Explicit Exclusion Negative Matcher
 - **User Story:**
   - *As the classification engine,*
   - *I want explicit negative exclusion patterns evaluated prior to positive classification,*
@@ -490,7 +490,7 @@
   - Input: "QA Recruitment Consultant". Output: Rejected / `NON_TECHNICAL`.
   - Input: "Software Sales Account Executive". Output: Rejected / `NON_TECHNICAL`.
 
-#### US-0501c: Primary and Secondary Specialization Assignment
+#### TASK-30.3: Primary and Secondary Specialization Assignment
 - **User Story:**
   - *As the classification engine,*
   - *I want to assign a required primary specialization and an optional secondary specialization,*
@@ -505,9 +505,9 @@
 
 ---
 
-### [ISSUE-31] US-0502: Scoped AI Ambiguity Resolver
+### TASK-31: Scoped AI Ambiguity Resolver
 
-#### US-0502a: Ambiguity Detection Trigger & Isolation
+#### TASK-31.1: Ambiguity Detection Trigger & Isolation
 - **User Story:**
   - *As the classification engine,*
   - *I want Gemini AI called ONLY when deterministic rules yield genuine ambiguity or zero matches,*
@@ -521,7 +521,7 @@
 - **Test Specifications:**
   - Process 50 jobs with unambiguous titles. Verify mock AI provider was called 0 times.
 
-#### US-0502b: Gemini Provider Integration with Zod Schema Validation
+#### TASK-31.2: Gemini Provider Integration with Zod Schema Validation
 - **User Story:**
   - *As the system,*
   - *I want Gemini prompts tightly structured and responses strictly validated using Zod,*
@@ -542,7 +542,7 @@
   - Mock Gemini returning valid JSON $\to$ Verify parsed specialization stored.
   - Mock Gemini returning invalid JSON or unknown enum $\to$ Verify handled safely as `UNRESOLVED`.
 
-#### US-0502c: Graceful Degradation on AI Outage
+#### TASK-31.3: Graceful Degradation on AI Outage
 - **User Story:**
   - *As the platform,*
   - *I want collection, matching, and digests to continue functioning with 100% availability if Gemini fails,*
@@ -556,9 +556,9 @@
 
 ---
 
-### [ISSUE-32] US-0503: Experience Level & Work Type Heuristic Classifier
+### TASK-32: Experience Level & Work Type Heuristic Classifier
 
-#### US-0503a: Seniority Heuristic Engine (Junior, Mid, Senior, Unknown)
+#### TASK-32.1: Seniority Heuristic Engine (Junior, Mid, Senior, Unknown)
 - **User Story:**
   - *As a candidate,*
   - *I want jobs labeled accurately with seniority levels (Junior, Mid, Senior),*
@@ -572,7 +572,7 @@
   - Test "Lead Software Architect" $\to$ `SENIOR`.
   - Test "Entry Level Python Developer" $\to$ `JUNIOR`.
 
-#### US-0503b: Contract & Employment Type Heuristic Engine
+#### TASK-32.2: Contract & Employment Type Heuristic Engine
 - **User Story:**
   - *As a candidate,*
   - *I want employment types classified cleanly (Full-time, Part-time, Contract, Internship),*
@@ -585,9 +585,9 @@
 
 ---
 
-### [ISSUE-33] US-0504: Remote Eligibility & Regional Scope Classifier
+### TASK-33: Remote Eligibility & Regional Scope Classifier
 
-#### US-0504a: 4-Tier Scope Categorization (WORLDWIDE, REGION, COUNTRY, UNKNOWN)
+#### TASK-33.1: 4-Tier Scope Categorization (WORLDWIDE, REGION, COUNTRY, UNKNOWN)
 - **User Story:**
   - *As a global candidate,*
   - *I want genuine worldwide remote opportunities strictly distinguished from geographically restricted roles,*
@@ -602,7 +602,7 @@
   - "Remote Frontend Engineer (Must reside in Germany)" $\to$ Scope: `COUNTRY`, Country: `DE`.
   - "Remote Node.js Developer (Worldwide / Work from anywhere)" $\to$ Scope: `WORLDWIDE`.
 
-#### US-0504b: Evidence-Based Confidence Scoring & Contradiction Detection
+#### TASK-33.2: Evidence-Based Confidence Scoring & Contradiction Detection
 - **User Story:**
   - *As the system,*
   - *I want evidence sources logged and contradictions resolved in favor of geographic restrictions,*
@@ -617,9 +617,9 @@
 
 ## Milestone M4: Arabic-First Telegram Onboarding & Preferences
 
-### [ISSUE-34] US-0201 & US-0202: Multi-Select Specialization Keyboards
+### TASK-34: Multi-Select Specialization Keyboards
 
-#### US-0201a: Welcome & State Initialization on `/start`
+#### TASK-34.1: Welcome & State Initialization on `/start`
 - **User Story:**
   - *As a new user,*
   - *I want a welcoming, concise Arabic introduction on `/start` explaining the bot and initiating setup,*
@@ -632,7 +632,7 @@
 - **Test Specifications:**
   - Test `/start` handler with mocked grammY context; verify welcome message and keyboard payload sent.
 
-#### US-0202a: Inline Button Multi-Selection (1 to 3 Specializations) with Toggle State
+#### TASK-34.2: Inline Button Multi-Selection (1 to 3 Specializations) with Toggle State
 - **User Story:**
   - *As a candidate,*
   - *I want to select between 1 and 3 specializations using interactive inline buttons with checkmarks (✅),*
@@ -648,9 +648,9 @@
 
 ---
 
-### [ISSUE-35] US-0203 & US-0204: Target Region & Preference Confirmation Flow
+### TASK-35: Target Region & Preference Confirmation Flow
 
-#### US-0203a: Region Preference Selection (Arab, International, Both)
+#### TASK-35.1: Region Preference Selection (Arab, International, Both)
 - **User Story:**
   - *As a candidate,*
   - *I want to select my target job market: Arab region, International, or Both,*
@@ -664,7 +664,7 @@
 - **Test Specifications:**
   - Click `ARAB` button; verify draft preference updated and user navigated to confirmation review.
 
-#### US-0204a: Interactive Summary Review & Transactional Preference Save
+#### TASK-35.2: Interactive Summary Review & Transactional Preference Save
 - **User Story:**
   - *As a candidate,*
   - *I want to review a summary of my selections and confirm them before saving,*
@@ -675,15 +675,15 @@
   - Clicking "تأكيد وحفظ":
     - Transactionally write `UserPreference` to PostgreSQL.
     - Compute and store `preferenceHash`.
-    - Trigger immediate first digest flow (`US-0701`).
+    - Trigger immediate first digest flow (`TASK-40`).
 - **Test Specifications:**
   - Verify DB record contains exact selected enums and computed hash upon confirmation.
 
 ---
 
-### [ISSUE-36] US-0205 - US-0208: Settings, Pause/Resume, Account Deletion & Help
+### TASK-36: Settings, Pause/Resume, Account Deletion & Help
 
-#### US-0205a: `/settings` Interactive Preference Editor
+#### TASK-36.1: `/settings` Interactive Preference Editor
 - **User Story:**
   - *As a registered subscriber,*
   - *I want to view and edit my saved preferences via `/settings` at any time,*
@@ -695,7 +695,7 @@
 - **Test Specifications:**
   - Update preferences via `/settings`; verify new preferences reflected immediately in subsequent queries.
 
-#### US-0206a: `/pause` (1 Day, 1 Week, Indefinite) & `/resume` Commands
+#### TASK-36.2: `/pause` (1 Day, 1 Week, Indefinite) & `/resume` Commands
 - **User Story:**
   - *As a subscriber,*
   - *I want to pause notifications temporarily or resume them with simple commands,*
@@ -708,7 +708,7 @@
 - **Test Specifications:**
   - Execute `/pause` for 1 day; verify `pausedUntil` is set to $NOW + 24\text{ hours}$. Verify delivery query excludes user.
 
-#### US-0207a: `/stop` Two-Step Confirmation & Data Anonymization
+#### TASK-36.3: `/stop` Two-Step Confirmation & Data Anonymization
 - **User Story:**
   - *As a user,*
   - *I want to unsubscribe and delete my profile with a confirmation prompt,*
@@ -720,7 +720,7 @@
 - **Test Specifications:**
   - Test confirmation sets status to `DELETED`. Verify subsequent digest run completely skips this user.
 
-#### US-0208a: `/help` Arabic Command Directory & Usage Guide
+#### TASK-36.4: `/help` Arabic Command Directory & Usage Guide
 - **User Story:**
   - *As a user,*
   - *I want a clear Arabic directory of all bot commands via `/help`,*
@@ -735,9 +735,9 @@
 
 ## Milestone M5: High-Performance Deterministic Matching Engine
 
-### [ISSUE-37] US-0601: Hard Filter Exclusion Engine
+### TASK-37: Hard Filter Exclusion Engine
 
-#### US-0601a: Specialization & Region Incompatibility Exclusion
+#### TASK-37.1: Specialization & Region Incompatibility Exclusion
 - **User Story:**
   - *As the matching engine,*
   - *I want clearly incompatible jobs filtered out before scoring,*
@@ -752,7 +752,7 @@
 - **Test Specifications:**
   - Candidate with `[BACKEND]` preference rejects a `FRONTEND` job with 100% certainty.
 
-#### US-0601b: Historical Delivery Exclusion ($O(1)$ Hash Set)
+#### TASK-37.2: Historical Delivery Exclusion ($O(1)$ Hash Set)
 - **User Story:**
   - *As the matching engine,*
   - *I want previously delivered jobs excluded in $O(1)$ lookup time,*
@@ -765,9 +765,9 @@
 
 ---
 
-### [ISSUE-38] US-0602: Explainable Bounded Scoring Calculator
+### TASK-38: Explainable Bounded Scoring Calculator
 
-#### US-0602a: Additive Multi-Signal Weighting Algorithm
+#### TASK-38.1: Additive Multi-Signal Weighting Algorithm
 - **User Story:**
   - *As a candidate,*
   - *I want jobs ranked by a transparent, bounded, deterministic score,*
@@ -786,7 +786,7 @@
   - Exact match fresh role: $50 + 15 + 15 + 10 + 5 = 95$ points.
   - Secondary match 5-day old role: $30 + 10 + 15 + 5 + 0 = 60$ points.
 
-#### US-0602b: Transparent Arabic Explanation Builder
+#### TASK-38.2: Transparent Arabic Explanation Builder
 - **User Story:**
   - *As a candidate,*
   - *I want a short Arabic explanation accompanying each job recommendation,*
@@ -800,9 +800,9 @@
 
 ---
 
-### [ISSUE-39] US-0603: Equivalence Group Matching Optimizer (10k+ Users Scaling)
+### TASK-39: Equivalence Group Matching Optimizer (10k+ Users Scaling)
 
-#### US-0603a: Equivalence Vector Hashing & User Grouping ($O(G \times J)$)
+#### TASK-39.1: Equivalence Vector Hashing & User Grouping ($O(G \times J)$)
 - **User Story:**
   - *As the matching engine,*
   - *I want users grouped by preference hash so candidate jobs are evaluated once per group instead of once per user,*
@@ -817,7 +817,7 @@
 - **Test Specifications:**
   - Benchmark test: 1,000 users distributed across 10 equivalence groups. Verify score function executed exactly 10 times, not 1,000 times.
 
-#### US-0603b: Personalized Sent-Log Application per Group Member
+#### TASK-39.2: Personalized Sent-Log Application per Group Member
 - **User Story:**
   - *As the matching engine,*
   - *I want group rankings personalized per user by subtracting each user's unique sent history,*
@@ -832,9 +832,9 @@
 
 ## Milestone M6: Resilient Twice-Daily Digest Delivery (10k Users Delivery)
 
-### [ISSUE-40] US-0701: Instant First Digest on Onboarding
+### TASK-40: Instant First Digest on Onboarding
 
-#### US-0701a: Post-Onboarding Database Query & Immediate Send
+#### TASK-40.1: Post-Onboarding Database Query & Immediate Send
 - **User Story:**
   - *As a newly subscribed candidate,*
   - *I want my first digest delivered immediately upon completing onboarding,*
@@ -848,7 +848,7 @@
 - **Test Specifications:**
   - Complete preference confirmation; verify digest message delivered in $<1.5$ seconds.
 
-#### US-0701b: Zero-Match Empty State Guidance
+#### TASK-40.2: Zero-Match Empty State Guidance
 - **User Story:**
   - *As a candidate,*
   - *I want helpful guidance if no jobs currently match my criteria,*
@@ -861,9 +861,9 @@
 
 ---
 
-### [ISSUE-41] US-0702 & US-0703: Slot-Based Batch Delivery Engine
+### TASK-41: Slot-Based Batch Delivery Engine
 
-#### US-0702a: Timezone-Aware Scheduled Cron Trigger (09:00 & 21:00 Asia/Gaza)
+#### TASK-41.1: Timezone-Aware Scheduled Cron Trigger (09:00 & 21:00 Asia/Gaza)
 - **User Story:**
   - *As a subscriber,*
   - *I want digests delivered reliably twice a day at 09:00 and 21:00 Asia/Gaza,*
@@ -875,7 +875,7 @@
 - **Test Specifications:**
   - Verify scheduler triggers at 09:00 and 21:00 Gaza time across daylight saving changes.
 
-#### US-0703a: Chunked Cursor Dispatcher (Batches of 25 with 25 msgs/sec pacing)
+#### TASK-41.2: Chunked Cursor Dispatcher (Batches of 25 with 25 msgs/sec pacing)
 - **User Story:**
   - *As the delivery engine,*
   - *I want 10,000 digest messages dispatched in sequential batches of 25 users paced at 25 msgs/sec,*
@@ -888,7 +888,7 @@
 - **Test Specifications:**
   - Simulate 250 deliveries. Monitor throughput; verify rate never exceeds 25 messages per second.
 
-#### US-0703b: Idempotent State Machine & Crash Recovery
+#### TASK-41.3: Idempotent State Machine & Crash Recovery
 - **User Story:**
   - *As an operations engineer,*
   - *I want an interrupted delivery run to resume seamlessly upon container restart,*
@@ -902,9 +902,9 @@
 
 ---
 
-### [ISSUE-42] US-0704 & US-0705: Rate Limit Resiliency, User Blocking & Missed Slot Watchdog
+### TASK-42: Rate Limit Resiliency, User Blocking & Missed Slot Watchdog
 
-#### US-0704a: Telegram 429 Retry-After Handling & Blocked User Flagging
+#### TASK-42.1: Telegram 429 Retry-After Handling & Blocked User Flagging
 - **User Story:**
   - *As the delivery engine,*
   - *I want Telegram rate limit errors handled with dynamic backoff and blocked users flagged immediately,*
@@ -916,7 +916,7 @@
 - **Test Specifications:**
   - Mock Telegram 403 response; verify user marked `BLOCKED` in PostgreSQL and loop continues.
 
-#### US-0705a: Missed Slot Detection & Watchdog Recovery
+#### TASK-42.2: Missed Slot Detection & Watchdog Recovery
 - **User Story:**
   - *As an operations engineer,*
   - *I want missed delivery slots detected and recovered within a 2-hour grace period,*
@@ -932,9 +932,9 @@
 
 ## Milestone M7: Digest UX & Job Explorer (/jobs)
 
-### [ISSUE-43] US-0801 - US-0804: Digest Pagination & Feedback
+### TASK-43: Digest Pagination & Feedback
 
-#### US-0801a: Arabic Digest Card Formatting (Max 5 Jobs/Page, Max 20 Total)
+#### TASK-43.1: Arabic Digest Card Formatting (Max 5 Jobs/Page, Max 20 Total)
 - **User Story:**
   - *As a candidate,*
   - *I want clean, readable Arabic job cards with 5 jobs per page (max 20 total) and direct application links,*
@@ -950,7 +950,7 @@
 - **Test Specifications:**
   - Verify card format renders correctly in Telegram test bot without broken HTML/Markdown entities.
 
-#### US-0803a: Inline Pagination Message Editing
+#### TASK-43.2: Inline Pagination Message Editing
 - **User Story:**
   - *As a candidate,*
   - *I want clicking page buttons to edit the existing message in-place,*
@@ -962,7 +962,7 @@
 - **Test Specifications:**
   - Click next page; verify `editMessageText` called with Page 2 content and updated button layout.
 
-#### US-0804a: Inline Feedback Handler (👍 / 👎)
+#### TASK-43.3: Inline Feedback Handler (👍 / 👎)
 - **User Story:**
   - *As a candidate,*
   - *I want to rate recommended jobs with thumbs up or thumbs down buttons,*
@@ -976,9 +976,9 @@
 
 ---
 
-### [ISSUE-44] US-0901 - US-0904: `/jobs` Database Explorer Engine
+### TASK-44: `/jobs` Database Explorer Engine
 
-#### US-0901a: Direct PostgreSQL Keyset Pagination Query
+#### TASK-44.1: Direct PostgreSQL Keyset Pagination Query
 - **User Story:**
   - *As a job seeker,*
   - *I want `/jobs` to query all currently active matching jobs directly from PostgreSQL,*
@@ -992,7 +992,7 @@
 - **Test Specifications:**
   - Benchmark 100 concurrent `/jobs` requests; verify all return in $<500\text{ms}$ with zero network calls to external job boards.
 
-#### US-0903a: Sorting Toggle (Best Match vs Latest)
+#### TASK-44.2: Sorting Toggle (Best Match vs Latest)
 - **User Story:**
   - *As a candidate,*
   - *I want to toggle sorting between "Best Match" (default) and "Latest",*
@@ -1004,7 +1004,7 @@
 - **Test Specifications:**
   - Toggle sort to Latest; verify SQL query orders by `published_at DESC`.
 
-#### US-0904a: Direct Application URL Link Validation
+#### TASK-44.3: Direct Application URL Link Validation
 - **User Story:**
   - *As a candidate,*
   - *I want job titles linking directly to official listings,*
@@ -1019,9 +1019,9 @@
 
 ## Milestone M8: Security, Observability & Staging
 
-### [ISSUE-45] US-1001 & US-1002: Boundary Validation & Endpoint Security
+### TASK-45: Boundary Validation & Endpoint Security
 
-#### US-1001a: Comprehensive Zod Inbound/Outbound Payloads Validation
+#### TASK-45.1: Comprehensive Zod Inbound/Outbound Payloads Validation
 - **User Story:**
   - *As a security engineer,*
   - *I want all environment variables, HTTP payloads, and Telegram callback data validated with Zod,*
@@ -1033,7 +1033,7 @@
 - **Test Specifications:**
   - Pass invalid callback payload; verify rejected safely without uncaught exception.
 
-#### US-1002a: Secure Pipeline Endpoint Authentication
+#### TASK-45.2: Secure Pipeline Endpoint Authentication
 - **User Story:**
   - *As an operations engineer,*
   - *I want internal pipeline and administrative endpoints protected by secret token authentication,*
@@ -1047,9 +1047,9 @@
 
 ---
 
-### [ISSUE-46] US-1004 & US-1005: Concurrency Control & Operational Telemetry
+### TASK-46: Concurrency Control & Operational Telemetry
 
-#### US-1004a: Structured JSON Logging & Detailed Health Endpoint
+#### TASK-46.1: Structured JSON Logging & Detailed Health Endpoint
 - **User Story:**
   - *As an operations engineer,*
   - *I want structured JSON logs and a comprehensive `GET /health` endpoint,*
@@ -1060,7 +1060,7 @@
 - **Test Specifications:**
   - Call `GET /health`; verify 200 OK with complete JSON telemetry object.
 
-#### US-1005a: Distributed Advisory Locking for Collector & Sender
+#### TASK-46.2: Distributed Advisory Locking for Collector & Sender
 - **User Story:**
   - *As the system,*
   - *I want PostgreSQL advisory locks guarding collection and delivery runs,*
@@ -1074,9 +1074,9 @@
 
 ---
 
-### [ISSUE-47] US-1102: Full Staging E2E Suite & 10k Users Load Test
+### TASK-47: Full Staging E2E Suite & 10k Users Load Test
 
-#### US-1102a: Simulated Load Testing for 10,000 Subscribers
+#### TASK-47.1: Simulated Load Testing for 10,000 Subscribers
 - **User Story:**
   - *As a QA engineer,*
   - *I want an automated load test simulating 10,000 subscribers and 1,000 jobs against a mock Telegram server,*
@@ -1090,7 +1090,7 @@
 - **Test Specifications:**
   - Review load test execution report: 10,000 sent, 0 duplicates, 0 uncaught exceptions.
 
-#### US-1102b: Fault Injection & Chaos Recovery Scenarios
+#### TASK-47.2: Fault Injection & Chaos Recovery Scenarios
 - **User Story:**
   - *As a QA engineer,*
   - *I want chaos scenarios (database drop, Telegram 429 flood) injected during active delivery,*
@@ -1105,9 +1105,9 @@
 
 ## Milestone M9: Production Migration & Launch
 
-### [ISSUE-48] US-1101: V1 Redis Data Migration Script
+### TASK-48: V1 Redis Data Migration Script
 
-#### US-1101a: Redis Preference Extraction & Taxonomy Mapping
+#### TASK-48.1: Redis Preference Extraction & Taxonomy Mapping
 - **User Story:**
   - *As a maintainer,*
   - *I want existing V1 Redis subscriber preferences extracted and mapped into the V2 PostgreSQL schema,*
@@ -1120,7 +1120,7 @@
 - **Test Specifications:**
   - Run migration on sample dataset of 50 users; verify 100% accurate conversion.
 
-#### US-1101b: Migration Dry-Run & Reconciliation Tooling
+#### TASK-48.2: Migration Dry-Run & Reconciliation Tooling
 - **User Story:**
   - *As a maintainer,*
   - *I want a dry-run migration mode reporting conversion statistics and discrepancy counts,*
@@ -1133,9 +1133,9 @@
 
 ---
 
-### [ISSUE-49] US-1103 & US-1104: Production Cutover & Operational Runbook
+### TASK-49: Production Cutover & Operational Runbook
 
-#### US-1103a: Production Deployment & Zero-Downtime Cutover
+#### TASK-49.1: Production Deployment & Zero-Downtime Cutover
 - **User Story:**
   - *As a release engineer,*
   - *I want zero-downtime cutover to V2 with health verification,*
@@ -1148,7 +1148,7 @@
 - **Test Specifications:**
   - Perform live smoke test interacting with production bot; verify interactive keyboard responses.
 
-#### US-1104a: Operational Runbook, Incident Response & Rollback Procedures
+#### TASK-49.2: Operational Runbook, Incident Response & Rollback Procedures
 - **User Story:**
   - *As a support engineer,*
   - *I want comprehensive operational runbooks and rehearsed rollback procedures to `v1-stable`,*
