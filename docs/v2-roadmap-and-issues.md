@@ -3,7 +3,7 @@
 
 - **Repository:** https://github.com/mohammedabusamra04/ai-career-platform
 - **Target Branch:** `v2`
-- **Baseline V1 Tag:** `v1-stable` (Commit `514d21b`)
+- **Baseline V1 Tag:** `v1-stable` (Commit `e926384`)
 - **Scale Target:** $\ge 10,000$ active subscribers with sub-second browsing and crash-resilient digests.
 - **Language Convention:** All commits, issues, code, and documentation are written strictly in English.
 
