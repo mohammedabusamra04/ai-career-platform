@@ -3,6 +3,7 @@ import { bot } from './bot/bot.js';
 import { connectRedis } from './config/redis.js';
 import redisClient from './config/redis.js';
 import env from './config/env.js';
+import { prisma } from './shared/database/prisma.service.js';
 import { jobNotificationScheduler } from './config/services.js';
 import logger from './shared/utils/logger.js';
 
@@ -11,6 +12,7 @@ const server = app.listen(env.port, () => {
 });
 
 await connectRedis();
+await prisma.connect();
 
 jobNotificationScheduler.start();
 
@@ -59,6 +61,8 @@ async function gracefulShutdown(signal: string): Promise<void> {
     await redisClient.quit();
     logger.info('Redis connection closed.');
   }
+
+  await prisma.disconnect();
 
   process.exit(0);
 }
