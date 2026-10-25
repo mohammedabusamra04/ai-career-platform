@@ -4,3 +4,6 @@ export * from './repositories/user.repository.interface.js';
 export * from './repositories/prisma-user.repository.js';
 export * from '../preferences/preference.taxonomy.js';
 export * from '../preferences/preference.schema.js';
+export * from '../preferences/preference.hasher.js';
+export * from '../preferences/repositories/user-preference.repository.interface.js';
+export * from '../preferences/repositories/prisma-user-preference.repository.js';
