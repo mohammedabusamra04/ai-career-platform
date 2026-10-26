@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PrismaClient } from '@prisma/client';
 import {
   PrismaJobRepository,
+  DEFAULT_JOB_RETENTION_DAYS,
   type NormalizedJobInput,
 } from '../../../src/modules/jobs/index.js';
 
-describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => {
+describe('PrismaJobRepository - Job Storage & Active Lifecycle (TASK-22)', () => {
   let mockPrisma: any;
   let repository: PrismaJobRepository;
 
@@ -51,8 +52,11 @@ describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => 
     mockPrisma = {
       job: {
         findUnique: vi.fn(),
+        findFirst: vi.fn(),
+        findMany: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
         count: vi.fn(),
       },
       $transaction: vi.fn(async (callback: any) => callback(mockPrisma)),
@@ -60,7 +64,7 @@ describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => 
     repository = new PrismaJobRepository(mockPrisma as unknown as PrismaClient);
   });
 
-  describe('upsertJob', () => {
+  describe('upsertJob (TASK-22.1)', () => {
     it('inserts a new job with status ACTIVE and timestamps when deduplicationKey does not exist', async () => {
       mockPrisma.job.findUnique.mockResolvedValue(null);
       mockPrisma.job.create.mockResolvedValue(sampleDbRecord);
@@ -125,9 +129,9 @@ describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => 
         company: sampleJobInput.company,
         source: sampleJobInput.source,
         url: sampleJobInput.url,
-        description: '', // Empty incoming description
-        applicationUrl: null, // Null incoming applicationUrl
-        location: null, // Null incoming location
+        description: '',
+        applicationUrl: null,
+        location: null,
         primarySpecialization: 'BACKEND',
         publishedAt: sampleJobInput.publishedAt,
       };
@@ -139,9 +143,9 @@ describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => 
       expect(mockPrisma.job.update).toHaveBeenCalledWith({
         where: { deduplicationKey: sampleJobInput.deduplicationKey },
         data: expect.objectContaining({
-          description: sampleDbRecord.description, // Kept existing non-empty description
-          applicationUrl: sampleDbRecord.applicationUrl, // Kept existing applicationUrl
-          location: sampleDbRecord.location, // Kept existing location
+          description: sampleDbRecord.description,
+          applicationUrl: sampleDbRecord.applicationUrl,
+          location: sampleDbRecord.location,
           lastSeenAt: expect.any(Date),
         }),
       });
@@ -171,46 +175,194 @@ describe('PrismaJobRepository - Atomic Upsert & Job Storage (TASK-22.1)', () => 
     });
   });
 
-  describe('findById & findByDeduplicationKey', () => {
-    it('returns mapped entity when job is found by id', async () => {
-      mockPrisma.job.findUnique.mockResolvedValue(sampleDbRecord);
+  describe('findActiveJobs (TASK-22.2)', () => {
+    it('filters strictly by status = ACTIVE and sorts by publishedAt DESC', async () => {
+      const activeJobs = [
+        { ...sampleDbRecord, id: 'job-1', publishedAt: new Date('2026-10-25T12:00:00Z') },
+        { ...sampleDbRecord, id: 'job-2', publishedAt: new Date('2026-10-25T11:00:00Z') },
+        { ...sampleDbRecord, id: 'job-3', publishedAt: new Date('2026-10-25T10:00:00Z') },
+        { ...sampleDbRecord, id: 'job-4', publishedAt: new Date('2026-10-25T09:00:00Z') },
+        { ...sampleDbRecord, id: 'job-5', publishedAt: new Date('2026-10-25T08:00:00Z') },
+      ];
 
-      const result = await repository.findById('job-uuid-1');
+      mockPrisma.job.findMany.mockResolvedValue(activeJobs);
 
-      expect(mockPrisma.job.findUnique).toHaveBeenCalledWith({
-        where: { id: 'job-uuid-1' },
+      const results = await repository.findActiveJobs();
+
+      expect(mockPrisma.job.findMany).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+        orderBy: { publishedAt: 'desc' },
+        take: undefined,
+        skip: undefined,
       });
-      expect(result?.title).toBe('Senior Backend Engineer');
+      expect(results).toHaveLength(5);
+      expect(results.every((j) => j.status === 'ACTIVE')).toBe(true);
     });
 
-    it('returns null when job is not found by id', async () => {
-      mockPrisma.job.findUnique.mockResolvedValue(null);
+    it('filters active jobs by primary specialization and remoteScope', async () => {
+      mockPrisma.job.findMany.mockResolvedValue([sampleDbRecord]);
 
-      const result = await repository.findById('non-existent');
+      await repository.findActiveJobs({
+        primarySpecialization: 'BACKEND',
+        remoteScope: 'WORLDWIDE',
+      });
 
-      expect(result).toBeNull();
+      expect(mockPrisma.job.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          primarySpecialization: 'BACKEND',
+          remoteScope: 'WORLDWIDE',
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: undefined,
+        skip: undefined,
+      });
     });
 
-    it('returns mapped entity when job is found by deduplicationKey', async () => {
-      mockPrisma.job.findUnique.mockResolvedValue(sampleDbRecord);
+    it('matches either primary or secondary specialization when generic specialization filter is used', async () => {
+      mockPrisma.job.findMany.mockResolvedValue([sampleDbRecord]);
 
-      const result = await repository.findByDeduplicationKey('job-hash-12345');
-
-      expect(mockPrisma.job.findUnique).toHaveBeenCalledWith({
-        where: { deduplicationKey: 'job-hash-12345' },
+      await repository.findActiveJobs({
+        specialization: 'DEVOPS',
       });
-      expect(result?.deduplicationKey).toBe('job-hash-12345');
+
+      expect(mockPrisma.job.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          OR: [
+            { primarySpecialization: 'DEVOPS' },
+            { secondarySpecialization: 'DEVOPS' },
+          ],
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: undefined,
+        skip: undefined,
+      });
+    });
+
+    it('supports pagination via limit and offset', async () => {
+      mockPrisma.job.findMany.mockResolvedValue([sampleDbRecord]);
+
+      await repository.findActiveJobs({
+        limit: 10,
+        offset: 20,
+      });
+
+      expect(mockPrisma.job.findMany).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+        orderBy: { publishedAt: 'desc' },
+        take: 10,
+        skip: 20,
+      });
     });
   });
 
-  describe('count', () => {
-    it('delegates count to Prisma client', async () => {
-      mockPrisma.job.count.mockResolvedValue(42);
+  describe('expireStaleJobs (TASK-22.2)', () => {
+    it('marks active jobs older than retention window as EXPIRED', async () => {
+      const fixedNow = new Date('2026-10-26T12:00:00Z');
+      const expectedCutoff = new Date(fixedNow.getTime() - DEFAULT_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
-      const count = await repository.count();
+      mockPrisma.job.updateMany.mockResolvedValue({ count: 7 });
 
-      expect(mockPrisma.job.count).toHaveBeenCalled();
-      expect(count).toBe(42);
+      const expiredCount = await repository.expireStaleJobs(DEFAULT_JOB_RETENTION_DAYS, fixedNow);
+
+      expect(mockPrisma.job.updateMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          lastSeenAt: {
+            lt: expectedCutoff,
+          },
+        },
+        data: {
+          status: 'EXPIRED',
+        },
+      });
+      expect(expiredCount).toBe(7);
+    });
+
+    it('allows custom retention days window', async () => {
+      const fixedNow = new Date('2026-10-26T12:00:00Z');
+      const customDays = 14;
+      const expectedCutoff = new Date(fixedNow.getTime() - customDays * 24 * 60 * 60 * 1000);
+
+      mockPrisma.job.updateMany.mockResolvedValue({ count: 3 });
+
+      const expiredCount = await repository.expireStaleJobs(customDays, fixedNow);
+
+      expect(mockPrisma.job.updateMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          lastSeenAt: {
+            lt: expectedCutoff,
+          },
+        },
+        data: {
+          status: 'EXPIRED',
+        },
+      });
+      expect(expiredCount).toBe(3);
+    });
+  });
+
+  describe('markJobAsClosed (TASK-22.2)', () => {
+    it('marks a job as CLOSED by id or deduplicationKey', async () => {
+      mockPrisma.job.findFirst.mockResolvedValue(sampleDbRecord);
+      mockPrisma.job.update.mockResolvedValue({
+        ...sampleDbRecord,
+        status: 'CLOSED',
+      });
+
+      const result = await repository.markJobAsClosed('job-uuid-1');
+
+      expect(mockPrisma.job.findFirst).toHaveBeenCalledWith({
+        where: {
+          OR: [
+            { id: 'job-uuid-1' },
+            { deduplicationKey: 'job-uuid-1' },
+          ],
+        },
+      });
+      expect(mockPrisma.job.update).toHaveBeenCalledWith({
+        where: { id: 'job-uuid-1' },
+        data: { status: 'CLOSED' },
+      });
+      expect(result.status).toBe('CLOSED');
+    });
+
+    it('throws error when job to close is not found', async () => {
+      mockPrisma.job.findFirst.mockResolvedValue(null);
+
+      await expect(repository.markJobAsClosed('non-existent')).rejects.toThrow(
+        'Job not found with identifier: non-existent',
+      );
+    });
+  });
+
+  describe('updateStatus & count', () => {
+    it('updates status of a job directly', async () => {
+      mockPrisma.job.update.mockResolvedValue({
+        ...sampleDbRecord,
+        status: 'EXPIRED',
+      });
+
+      const result = await repository.updateStatus('job-uuid-1', 'EXPIRED');
+
+      expect(mockPrisma.job.update).toHaveBeenCalledWith({
+        where: { id: 'job-uuid-1' },
+        data: { status: 'EXPIRED' },
+      });
+      expect(result.status).toBe('EXPIRED');
+    });
+
+    it('counts jobs with optional status filter', async () => {
+      mockPrisma.job.count.mockResolvedValue(15);
+
+      const count = await repository.count('ACTIVE');
+
+      expect(mockPrisma.job.count).toHaveBeenCalledWith({
+        where: { status: 'ACTIVE' },
+      });
+      expect(count).toBe(15);
     });
   });
 });
