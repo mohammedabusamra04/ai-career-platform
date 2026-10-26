@@ -59,9 +59,25 @@ export interface NormalizedJobInput {
   status?: JobStatus;
 }
 
+export interface JobFilter {
+  specialization?: Specialization;
+  primarySpecialization?: Specialization;
+  secondarySpecialization?: Specialization;
+  remoteScope?: RemoteScope;
+  experienceLevel?: ExperienceLevel;
+  workType?: WorkType;
+  publishedSince?: Date;
+  limit?: number;
+  offset?: number;
+}
+
 export interface IJobRepository {
   upsertJob(jobData: NormalizedJobInput): Promise<JobEntity>;
   findById(id: string): Promise<JobEntity | null>;
   findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null>;
-  count(): Promise<number>;
+  count(status?: JobStatus): Promise<number>;
+  findActiveJobs(filter?: JobFilter): Promise<JobEntity[]>;
+  expireStaleJobs(retentionDays?: number, now?: Date): Promise<number>;
+  markJobAsClosed(idOrDeduplicationKey: string): Promise<JobEntity>;
+  updateStatus(id: string, status: JobStatus): Promise<JobEntity>;
 }

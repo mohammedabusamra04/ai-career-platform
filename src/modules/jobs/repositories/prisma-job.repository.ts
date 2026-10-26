@@ -1,10 +1,17 @@
-import type { PrismaClient, Job as PrismaJobRecord } from '@prisma/client';
+import type {
+  PrismaClient,
+  Job as PrismaJobRecord,
+  JobStatus,
+} from '@prisma/client';
 import { prisma as defaultPrisma } from '../../../shared/database/prisma.service.js';
 import type {
   IJobRepository,
   JobEntity,
   NormalizedJobInput,
+  JobFilter,
 } from './job.repository.interface.js';
+
+export const DEFAULT_JOB_RETENTION_DAYS = 21;
 
 export class PrismaJobRepository implements IJobRepository {
   constructor(private readonly db: PrismaClient = defaultPrisma) {}
@@ -122,8 +129,112 @@ export class PrismaJobRepository implements IJobRepository {
     return record ? this.mapToEntity(record) : null;
   }
 
-  public async count(): Promise<number> {
-    return this.db.job.count();
+  public async count(status?: JobStatus): Promise<number> {
+    return this.db.job.count({
+      where: status ? { status } : undefined,
+    });
+  }
+
+  public async findActiveJobs(filter?: JobFilter): Promise<JobEntity[]> {
+    const where: any = {
+      status: 'ACTIVE',
+    };
+
+    if (filter?.primarySpecialization) {
+      where.primarySpecialization = filter.primarySpecialization;
+    } else if (filter?.specialization) {
+      where.OR = [
+        { primarySpecialization: filter.specialization },
+        { secondarySpecialization: filter.specialization },
+      ];
+    }
+
+    if (filter?.secondarySpecialization) {
+      where.secondarySpecialization = filter.secondarySpecialization;
+    }
+
+    if (filter?.remoteScope) {
+      where.remoteScope = filter.remoteScope;
+    }
+
+    if (filter?.experienceLevel) {
+      where.experienceLevel = filter.experienceLevel;
+    }
+
+    if (filter?.workType) {
+      where.workType = filter.workType;
+    }
+
+    if (filter?.publishedSince) {
+      where.publishedAt = {
+        gte: filter.publishedSince,
+      };
+    }
+
+    const records = await this.db.job.findMany({
+      where,
+      orderBy: {
+        publishedAt: 'desc',
+      },
+      take: filter?.limit,
+      skip: filter?.offset,
+    });
+
+    return records.map((r) => this.mapToEntity(r));
+  }
+
+  public async expireStaleJobs(
+    retentionDays: number = DEFAULT_JOB_RETENTION_DAYS,
+    now: Date = new Date(),
+  ): Promise<number> {
+    const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+
+    const result = await this.db.job.updateMany({
+      where: {
+        status: 'ACTIVE',
+        lastSeenAt: {
+          lt: cutoff,
+        },
+      },
+      data: {
+        status: 'EXPIRED',
+      },
+    });
+
+    return result.count;
+  }
+
+  public async markJobAsClosed(idOrDeduplicationKey: string): Promise<JobEntity> {
+    const existing = await this.db.job.findFirst({
+      where: {
+        OR: [
+          { id: idOrDeduplicationKey },
+          { deduplicationKey: idOrDeduplicationKey },
+        ],
+      },
+    });
+
+    if (!existing) {
+      throw new Error(`Job not found with identifier: ${idOrDeduplicationKey}`);
+    }
+
+    const updated = await this.db.job.update({
+      where: { id: existing.id },
+      data: {
+        status: 'CLOSED',
+      },
+    });
+
+    return this.mapToEntity(updated);
+  }
+
+  public async updateStatus(id: string, status: JobStatus): Promise<JobEntity> {
+    const updated = await this.db.job.update({
+      where: { id },
+      data: { status },
+    });
+
+    return this.mapToEntity(updated);
   }
 
   private mapToEntity(row: PrismaJobRecord): JobEntity {
