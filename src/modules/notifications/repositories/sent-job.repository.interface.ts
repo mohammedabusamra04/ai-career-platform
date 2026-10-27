@@ -15,6 +15,13 @@ export interface DeliveryRecordInput {
   feedback?: FeedbackType;
 }
 
+export interface FeedbackStats {
+  likes: number;
+  dislikes: number;
+  none: number;
+  totalSent: number;
+}
+
 export interface ISentJobRepository {
   recordBatchSent(deliveries: DeliveryRecordInput[]): Promise<void>;
   getSentJobIdsForUser(userId: string): Promise<Set<string>>;
@@ -22,4 +29,9 @@ export interface ISentJobRepository {
   filterUnsentJobsForUser(userId: string, candidateJobIds: string[]): Promise<string[]>;
   countSentJobs(userId?: string): Promise<number>;
   deleteSentHistoryForUser(userId: string): Promise<void>;
+
+  // User Relevance Feedback (TASK-23.2)
+  recordFeedback(userId: string, jobId: string, feedback: FeedbackType): Promise<SentJobEntity>;
+  getFeedback(userId: string, jobId: string): Promise<FeedbackType | null>;
+  getFeedbackStats(jobId: string): Promise<FeedbackStats>;
 }
