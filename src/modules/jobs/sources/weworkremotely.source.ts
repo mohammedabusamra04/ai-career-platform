@@ -8,7 +8,7 @@ export class WeWorkRemotelyJobSource implements JobSource {
   private readonly feedUrl =
     'https://weworkremotely.com/categories/remote-programming-jobs.rss';
 
-  async fetchJobs(query: JobSearchQuery): Promise<Job[]> {
+  async fetchJobs(query?: JobSearchQuery): Promise<Job[]> {
     try {
       const response = await fetch(this.feedUrl, {
         headers: {
@@ -29,13 +29,13 @@ export class WeWorkRemotelyJobSource implements JobSource {
     }
   }
 
-  private parseRss(xml: string, query: JobSearchQuery): Job[] {
+  private parseRss(xml: string, query?: JobSearchQuery): Job[] {
     const items: Job[] = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
     let match;
 
-    const keywords = [query.jobTitle, ...(query.skills || [])]
-      .filter(Boolean)
+    const keywords = [query?.jobTitle, ...(query?.skills || [])]
+      .filter((k): k is string => Boolean(k))
       .map((k) => k.toLowerCase());
 
     while ((match = itemRegex.exec(xml)) !== null) {
@@ -84,9 +84,9 @@ export class WeWorkRemotelyJobSource implements JobSource {
         location: 'Remote',
         remote: true,
         workType: WorkType.REMOTE,
-        experienceLevel: query.experienceLevel || ExperienceLevel.MID,
+        experienceLevel: query?.experienceLevel || ExperienceLevel.MID,
         description: cleanDescription,
-        skills: query.skills || [],
+        skills: query?.skills || [],
         publicationDate: validPubDate,
         publishedAt: validPubDate,
         scrapedAt: new Date(),
