@@ -22,6 +22,8 @@ import {
   ForasnaJobSource,
   LinkedinJobSource,
   FirecrawlLinkedInSource,
+  BaeedJobSource,
+  NaukrigulfJobSource,
 } from '../modules/jobs/sources/index.js';
 import type { JobSource } from '../modules/jobs/sources/job-source.interface.js';
 
@@ -56,6 +58,8 @@ export const activeJobSources: JobSource[] = [
   new BaytJobSource(),
   new WuzzufJobSource(),
   new ForasnaJobSource(),
+  new BaeedJobSource(),
+  new NaukrigulfJobSource(),
   ...(env.adzunaAppId && env.adzunaAppKey
     ? [new AdzunaJobSource(env.adzunaAppId, env.adzunaAppKey)]
     : []),
