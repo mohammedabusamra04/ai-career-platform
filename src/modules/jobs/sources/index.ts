@@ -1,4 +1,9 @@
-export { JobSourceManager } from './job-source.manager.js';
+export {
+  JobSourceManager,
+  DEFAULT_SOURCE_TIMEOUT_MS,
+  type SourceTelemetry,
+  type CollectionExecutionSummary,
+} from './job-source.manager.js';
 export { JobSourceRegistry } from './job-source.registry.js';
 export type { JobSource } from './job-source.interface.js';
 export { JobSourceError } from './job-source.error.js';
@@ -14,4 +19,6 @@ export { WuzzufJobSource } from './wuzzuf.source.js';
 export { ForasnaJobSource } from './forasna.source.js';
 export { LinkedinJobSource } from './linkedin.source.js';
 export { FirecrawlLinkedInSource } from './firecrawl-linkedin.source.js';
+export { BaeedJobSource } from './baeed.source.js';
+export { NaukrigulfJobSource } from './naukrigulf.source.js';
 

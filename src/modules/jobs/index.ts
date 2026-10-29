@@ -5,3 +5,4 @@ export * from './job.normalizer.js';
 export * from './job.validator.js';
 export * from './job.collection.service.js';
 export * from './job.pipeline.service.js';
+export * from './sources/index.js';
