@@ -47,6 +47,8 @@ export interface Job {
   scrapedAt: Date;
 }
 
+export type RawJobListing = Job;
+
 export interface JobSearchQuery {
   jobTitle: string;
   workType?: WorkType;
