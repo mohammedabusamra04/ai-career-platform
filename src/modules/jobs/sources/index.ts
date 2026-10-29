@@ -19,4 +19,6 @@ export { WuzzufJobSource } from './wuzzuf.source.js';
 export { ForasnaJobSource } from './forasna.source.js';
 export { LinkedinJobSource } from './linkedin.source.js';
 export { FirecrawlLinkedInSource } from './firecrawl-linkedin.source.js';
+export { BaeedJobSource } from './baeed.source.js';
+export { NaukrigulfJobSource } from './naukrigulf.source.js';
 
