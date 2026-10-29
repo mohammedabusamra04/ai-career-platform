@@ -6,6 +6,8 @@ import { TanqeebJobSource } from '../../src/modules/jobs/sources/tanqeeb.source.
 import { AdzunaJobSource } from '../../src/modules/jobs/sources/adzuna.source.js';
 import { JoobleJobSource } from '../../src/modules/jobs/sources/jooble.source.js';
 import { LinkedinJobSource } from '../../src/modules/jobs/sources/linkedin.source.js';
+import { BaeedJobSource } from '../../src/modules/jobs/sources/baeed.source.js';
+import { NaukrigulfJobSource } from '../../src/modules/jobs/sources/naukrigulf.source.js';
 import { JobSourceType } from '../../src/modules/jobs/job.types.js';
 import { loadSourceFixture, loadSourceJsonFixture } from '../helpers/fixture-loader.js';
 
@@ -157,4 +159,41 @@ describe('Job Source Fixture Testing & Mock Harness (TASK-25.2)', () => {
     expect(jobs[1].location).toBe('Worldwide');
     expect(jobs[1].remote).toBe(false);
   });
+
+  it('validates Baeed HTML parser extraction for Arabic remote jobs', async () => {
+    const fixture = loadSourceFixture('baeed.html');
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => fixture,
+    });
+
+    const source = new BaeedJobSource();
+    const jobs = await source.fetchJobs();
+
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0].title).toContain('مطور ويب متكامل');
+    expect(jobs[0].company).toBe('شركة إبتكار للتقنية');
+    expect(jobs[0].remote).toBe(true);
+    expect(jobs[0].source).toBe(JobSourceType.BAEED);
+    expect(jobs[0].applicationUrl).toMatch(/^https:\/\/baeed\.com/);
+  });
+
+  it('validates Naukrigulf HTML parser extraction for GCC jobs', async () => {
+    const fixture = loadSourceFixture('naukrigulf.html');
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => fixture,
+    });
+
+    const source = new NaukrigulfJobSource();
+    const jobs = await source.fetchJobs();
+
+    expect(jobs).toHaveLength(2);
+    expect(jobs[0].title).toBe('Senior Cloud Solutions Architect');
+    expect(jobs[0].company).toBe('Al-Futtaim Technologies');
+    expect(jobs[0].location).toBe('Riyadh, Saudi Arabia');
+    expect(jobs[0].source).toBe(JobSourceType.NARIGULF);
+    expect(jobs[0].applicationUrl).toMatch(/^https:\/\/www\.naukrigulf\.com/);
+  });
 });
+
