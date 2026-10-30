@@ -17,6 +17,14 @@ import {
 } from '../../shared/database/advisory-lock.service.js';
 import logger from '../../shared/utils/logger.js';
 
+export interface SourceExecutionStat {
+  source: string;
+  status: 'fulfilled' | 'rejected' | 'timeout';
+  jobCount: number;
+  durationMs: number;
+  error?: string;
+}
+
 export interface CollectionStats {
   runId: string;
   durationMs: number;
@@ -26,6 +34,7 @@ export interface CollectionStats {
   newJobsInserted: number;
   existingJobsUpdated: number;
   duplicatesDropped: number;
+  sourcesBreakdown?: SourceExecutionStat[];
   timestamp: string;
 }
 
@@ -38,6 +47,8 @@ export interface CollectionCycleResult {
 
 export class JobCollectionService {
   private lastStats: CollectionStats | null = null;
+  private readonly history: CollectionStats[] = [];
+  private static readonly MAX_HISTORY_SIZE = 10;
 
   constructor(
     private readonly sourceManager: JobSourceManager,
@@ -80,17 +91,32 @@ export class JobCollectionService {
       let rawJobs: Job[] = [];
       let sourcesAttempted = 0;
       let sourcesFailed = 0;
+      let sourcesBreakdown: SourceExecutionStat[] = [];
 
       if (typeof this.sourceManager.fetchJobsDetailed === 'function') {
         const detailed = await this.sourceManager.fetchJobsDetailed(options?.query);
         rawJobs = detailed.jobs;
         sourcesAttempted = detailed.attempted;
         sourcesFailed = detailed.failed;
+        sourcesBreakdown = (detailed.telemetry || []).map((t) => ({
+          source: t.source,
+          status: t.status,
+          jobCount: t.jobCount,
+          durationMs: t.durationMs,
+          error: t.error,
+        }));
       } else {
         rawJobs = await this.sourceManager.fetchJobs(options?.query);
         const telemetry = this.sourceManager.getLastTelemetry();
         sourcesAttempted = telemetry.length;
         sourcesFailed = telemetry.filter((t) => t.status !== 'fulfilled').length;
+        sourcesBreakdown = telemetry.map((t) => ({
+          source: t.source,
+          status: t.status,
+          jobCount: t.jobCount,
+          durationMs: t.durationMs,
+          error: t.error,
+        }));
       }
 
       // 3. Normalize & Sanitize
@@ -171,12 +197,27 @@ export class JobCollectionService {
         newJobsInserted,
         existingJobsUpdated,
         duplicatesDropped,
+        sourcesBreakdown,
         timestamp: new Date().toISOString(),
       };
 
       this.lastStats = stats;
+      this.recordHistory(stats);
+
+      // Structured JSON log for operational observability (Loki / Datadog / CloudWatch)
       logger.info(
-        `[JobCollectionService] Collection cycle ${runId} finished in ${durationMs}ms: fetched=${stats.totalFetched}, inserted=${newJobsInserted}, updated=${existingJobsUpdated}, dupesDropped=${duplicatesDropped}`,
+        `[COLLECTOR_EXECUTION_METRICS] ${JSON.stringify({
+          event: 'job_collection_completed',
+          runId: stats.runId,
+          durationMs: stats.durationMs,
+          sourcesAttempted: stats.sourcesAttempted,
+          sourcesFailed: stats.sourcesFailed,
+          totalFetched: stats.totalFetched,
+          newJobsInserted: stats.newJobsInserted,
+          existingJobsUpdated: stats.existingJobsUpdated,
+          duplicatesDropped: stats.duplicatesDropped,
+          timestamp: stats.timestamp,
+        })}`,
       );
 
       return {
@@ -205,6 +246,21 @@ export class JobCollectionService {
 
   public setLastStatsForTesting(stats: CollectionStats | null): void {
     this.lastStats = stats;
+  }
+
+  public getCollectionHistory(): CollectionStats[] {
+    return [...this.history];
+  }
+
+  public clearHistoryForTesting(): void {
+    this.history.length = 0;
+  }
+
+  private recordHistory(stats: CollectionStats): void {
+    this.history.unshift(stats);
+    if (this.history.length > JobCollectionService.MAX_HISTORY_SIZE) {
+      this.history.pop();
+    }
   }
 
   private isRecentJob(job: Job): boolean {
