@@ -1,23 +1,217 @@
+import ms from 'ms';
 import type { Job, JobSearchQuery } from './job.types.js';
 import { JobSourceManager } from './sources/job-source.manager.js';
 import { validateJob } from './job.validator.js';
-import ms from 'ms';
+import { normalizeJob } from './job.normalizer.js';
+import type { IJobRepository, NormalizedJobInput } from './repositories/job.repository.interface.js';
+import { DeduplicationService } from '../deduplication/deduplication.service.js';
+import { FingerprintService } from '../deduplication/fingerprint.service.js';
+import {
+  DeterministicJobClassifier,
+  deterministicJobClassifier,
+} from './classifier/job.classifier.js';
+import {
+  AdvisoryLockService,
+  JOB_COLLECTION_ADVISORY_LOCK_ID,
+  type IAdvisoryLockService,
+} from '../../shared/database/advisory-lock.service.js';
+import logger from '../../shared/utils/logger.js';
+
+export interface CollectionStats {
+  runId: string;
+  durationMs: number;
+  sourcesAttempted: number;
+  sourcesFailed: number;
+  totalFetched: number;
+  newJobsInserted: number;
+  existingJobsUpdated: number;
+  duplicatesDropped: number;
+  timestamp: string;
+}
+
+export interface CollectionCycleResult {
+  runId: string;
+  executed: boolean;
+  skippedReason?: string;
+  stats?: CollectionStats;
+}
 
 export class JobCollectionService {
-  constructor(private readonly sourceManager: JobSourceManager) {}
+  private lastStats: CollectionStats | null = null;
 
-  async collectJobs(query: JobSearchQuery): Promise<Job[]> {
+  constructor(
+    private readonly sourceManager: JobSourceManager,
+    private readonly jobRepository?: IJobRepository,
+    private readonly deduplicationService?: DeduplicationService,
+    private readonly fingerprintService?: FingerprintService,
+    private readonly classifier: DeterministicJobClassifier = deterministicJobClassifier,
+    private readonly advisoryLock: IAdvisoryLockService = new AdvisoryLockService(),
+  ) {}
+
+  /**
+   * Decoupled Collection Pipeline Engine (TASK-26.1 & TASK-26.2).
+   * Sequence: Harvest Sources -> Normalize & Sanitize -> Two-Tier Deduplicate -> Deterministic Classify -> Upsert to Shared Pool.
+   * Concurrency is guarded via PostgreSQL advisory lock (pg_try_advisory_lock).
+   */
+  public async executeCollectionCycle(options?: {
+    force?: boolean;
+    query?: JobSearchQuery;
+  }): Promise<CollectionCycleResult> {
+    const startTime = Date.now();
+    const runId = `col_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+    // 1. Guard against concurrent collection runs using PostgreSQL advisory locks
+    const acquired = await this.advisoryLock.tryAcquire(JOB_COLLECTION_ADVISORY_LOCK_ID);
+    if (!acquired && !options?.force) {
+      logger.warn(
+        `[JobCollectionService] Run ${runId} skipped: PostgreSQL advisory lock already held by another runner.`,
+      );
+      return {
+        runId,
+        executed: false,
+        skippedReason: 'Advisory lock already held by another runner',
+      };
+    }
+
+    try {
+      logger.info(`[JobCollectionService] Starting independent collection cycle (Run: ${runId})`);
+
+      // 2. Harvest Sources
+      let rawJobs: Job[] = [];
+      let sourcesAttempted = 0;
+      let sourcesFailed = 0;
+
+      if (typeof this.sourceManager.fetchJobsDetailed === 'function') {
+        const detailed = await this.sourceManager.fetchJobsDetailed(options?.query);
+        rawJobs = detailed.jobs;
+        sourcesAttempted = detailed.attempted;
+        sourcesFailed = detailed.failed;
+      } else {
+        rawJobs = await this.sourceManager.fetchJobs(options?.query);
+        const telemetry = this.sourceManager.getLastTelemetry();
+        sourcesAttempted = telemetry.length;
+        sourcesFailed = telemetry.filter((t) => t.status !== 'fulfilled').length;
+      }
+
+      // 3. Normalize & Sanitize
+      const normalizedJobs = rawJobs
+        .map((raw) => normalizeJob(raw))
+        .filter(validateJob)
+        .filter((job) => this.isRecentJob(job));
+
+      // 4. Two-Tier Deduplication
+      let uniqueJobs = normalizedJobs;
+      let duplicatesDropped = 0;
+
+      if (this.deduplicationService) {
+        const dedupeResult = await this.deduplicationService.deduplicate(normalizedJobs);
+        uniqueJobs = dedupeResult.uniqueJobs;
+        duplicatesDropped = dedupeResult.duplicateJobs.length;
+      }
+
+      // 5. Deterministic Classify & 6. Upsert to Shared Pool
+      let newJobsInserted = 0;
+      let existingJobsUpdated = 0;
+
+      const fpService = this.fingerprintService ?? new FingerprintService();
+
+      if (this.jobRepository) {
+        for (const job of uniqueJobs) {
+          const deduplicationKey = fpService.generate(job);
+          const semanticKey = fpService.generateSemanticFingerprint(job);
+          const classification = this.classifier.classify(job);
+
+          const input: NormalizedJobInput = {
+            deduplicationKey,
+            semanticKey,
+            title: job.title,
+            company: job.company,
+            source: job.source,
+            url: job.url,
+            applicationUrl: job.applicationUrl || null,
+            location: job.location || null,
+            country: job.country || null,
+            remoteScope: classification.remoteScope,
+            primarySpecialization: classification.primarySpecialization,
+            secondarySpecialization: classification.secondarySpecialization,
+            experienceLevel: classification.experienceLevel,
+            workType: classification.workType,
+            description: job.description || '',
+            skills: job.skills || [],
+            salaryMin: job.salaryMin ?? null,
+            salaryMax: job.salaryMax ?? null,
+            currency: job.currency ?? null,
+            publishedAt: job.publishedAt || job.publicationDate || new Date(),
+            scrapedAt: job.scrapedAt || new Date(),
+            lastSeenAt: new Date(),
+            status: 'ACTIVE',
+          };
+
+          if (typeof this.jobRepository.upsertJobWithResult === 'function') {
+            const res = await this.jobRepository.upsertJobWithResult(input);
+            if (res.isNew) {
+              newJobsInserted++;
+            } else {
+              existingJobsUpdated++;
+            }
+          } else {
+            await this.jobRepository.upsertJob(input);
+            newJobsInserted++;
+          }
+        }
+      }
+
+      const durationMs = Date.now() - startTime;
+      const stats: CollectionStats = {
+        runId,
+        durationMs,
+        sourcesAttempted,
+        sourcesFailed,
+        totalFetched: rawJobs.length,
+        newJobsInserted,
+        existingJobsUpdated,
+        duplicatesDropped,
+        timestamp: new Date().toISOString(),
+      };
+
+      this.lastStats = stats;
+      logger.info(
+        `[JobCollectionService] Collection cycle ${runId} finished in ${durationMs}ms: fetched=${stats.totalFetched}, inserted=${newJobsInserted}, updated=${existingJobsUpdated}, dupesDropped=${duplicatesDropped}`,
+      );
+
+      return {
+        runId,
+        executed: true,
+        stats,
+      };
+    } finally {
+      if (acquired) {
+        await this.advisoryLock.release(JOB_COLLECTION_ADVISORY_LOCK_ID);
+      }
+    }
+  }
+
+  /**
+   * Backward-compatible collection query method.
+   */
+  public async collectJobs(query?: JobSearchQuery): Promise<Job[]> {
     const jobs = await this.sourceManager.fetchJobs(query);
-
     return jobs.filter(validateJob).filter((job) => this.isRecentJob(job));
+  }
+
+  public getLastStats(): CollectionStats | null {
+    return this.lastStats;
+  }
+
+  public setLastStatsForTesting(stats: CollectionStats | null): void {
+    this.lastStats = stats;
   }
 
   private isRecentJob(job: Job): boolean {
     if (!job.publicationDate || isNaN(job.publicationDate.getTime())) {
       return true;
     }
-    const cutoff = new Date(Date.now() - ms('7d'));
-
+    const cutoff = new Date(Date.now() - ms('21d'));
     return job.publicationDate >= cutoff;
   }
 }

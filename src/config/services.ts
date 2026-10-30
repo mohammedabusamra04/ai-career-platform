@@ -71,13 +71,22 @@ export const activeJobSources: JobSource[] = [
       : []),
 ];
 
+import { PrismaJobRepository } from '../modules/jobs/repositories/prisma-job.repository.js';
+
 export const jobSourceManager = new JobSourceManager(activeJobSources);
 
-export const jobCollectionService = new JobCollectionService(jobSourceManager);
+export const fingerprintService = new FingerprintService();
 
-const fingerprintService = new FingerprintService();
+export const deduplicationService = new DeduplicationService(fingerprintService, cache);
 
-const deduplicationService = new DeduplicationService(fingerprintService, cache);
+export const prismaJobRepository = new PrismaJobRepository();
+
+export const jobCollectionService = new JobCollectionService(
+  jobSourceManager,
+  prismaJobRepository,
+  deduplicationService,
+  fingerprintService,
+);
 
 const aiProvider = new GeminiProvider();
 
