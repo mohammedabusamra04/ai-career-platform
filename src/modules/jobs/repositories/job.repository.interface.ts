@@ -71,8 +71,14 @@ export interface JobFilter {
   offset?: number;
 }
 
+export interface UpsertResult {
+  job: JobEntity;
+  isNew: boolean;
+}
+
 export interface IJobRepository {
   upsertJob(jobData: NormalizedJobInput): Promise<JobEntity>;
+  upsertJobWithResult(jobData: NormalizedJobInput): Promise<UpsertResult>;
   findById(id: string): Promise<JobEntity | null>;
   findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null>;
   count(status?: JobStatus): Promise<number>;
