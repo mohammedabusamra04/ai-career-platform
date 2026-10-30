@@ -182,6 +182,22 @@ describe('JobCollectionService - Decoupled Collection Pipeline Engine (TASK-26.1
 
       // Verify stats are accessible via getLastStats()
       expect(service.getLastStats()).toEqual(outcome.stats);
+      expect(outcome.stats?.sourcesBreakdown).toBeDefined();
+
+      // Verify collection history tracking (ring buffer up to 10 entries)
+      const history = service.getCollectionHistory();
+      expect(history).toHaveLength(1);
+      expect(history[0].runId).toBe(outcome.stats?.runId);
+    });
+
+    it('limits collection history to the maximum 10 latest runs', async () => {
+      service.clearHistoryForTesting();
+      for (let i = 0; i < 15; i++) {
+        await service.executeCollectionCycle();
+      }
+
+      const history = service.getCollectionHistory();
+      expect(history).toHaveLength(10);
     });
   });
 
