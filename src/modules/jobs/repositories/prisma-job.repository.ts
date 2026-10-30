@@ -9,6 +9,7 @@ import type {
   JobEntity,
   NormalizedJobInput,
   JobFilter,
+  UpsertResult,
 } from './job.repository.interface.js';
 
 export const DEFAULT_JOB_RETENTION_DAYS = 21;
@@ -17,9 +18,14 @@ export class PrismaJobRepository implements IJobRepository {
   constructor(private readonly db: PrismaClient = defaultPrisma) {}
 
   public async upsertJob(jobData: NormalizedJobInput): Promise<JobEntity> {
+    const result = await this.upsertJobWithResult(jobData);
+    return result.job;
+  }
+
+  public async upsertJobWithResult(jobData: NormalizedJobInput): Promise<UpsertResult> {
     const now = new Date();
 
-    const record = await this.db.$transaction(async (tx) => {
+    const { record, isNew } = await this.db.$transaction(async (tx) => {
       const existing = await tx.job.findUnique({
         where: {
           deduplicationKey: jobData.deduplicationKey,
@@ -27,7 +33,7 @@ export class PrismaJobRepository implements IJobRepository {
       });
 
       if (!existing) {
-        return tx.job.create({
+        const created = await tx.job.create({
           data: {
             deduplicationKey: jobData.deduplicationKey,
             semanticKey: jobData.semanticKey,
@@ -54,6 +60,7 @@ export class PrismaJobRepository implements IJobRepository {
             status: jobData.status ?? 'ACTIVE',
           },
         });
+        return { record: created, isNew: true };
       }
 
       // Merge data preserving richer non-null fields
@@ -82,7 +89,7 @@ export class PrismaJobRepository implements IJobRepository {
           ? jobData.workType
           : existing.workType;
 
-      return tx.job.update({
+      const updated = await tx.job.update({
         where: {
           deduplicationKey: jobData.deduplicationKey,
         },
@@ -108,9 +115,13 @@ export class PrismaJobRepository implements IJobRepository {
           lastSeenAt: jobData.lastSeenAt ?? now,
         },
       });
+      return { record: updated, isNew: false };
     });
 
-    return this.mapToEntity(record);
+    return {
+      job: this.mapToEntity(record),
+      isNew,
+    };
   }
 
   public async findById(id: string): Promise<JobEntity | null> {

@@ -2,6 +2,7 @@ import express from 'express';
 import { errorHandler } from './shared/middleware/error.middleware.js';
 import { responseFormatter } from './shared/middleware/response.middleware.js';
 import jobPipelineRouter from './modules/jobs/job.pipeline.route.js';
+import jobCollectionRouter from './modules/jobs/job.collection.route.js';
 import env from './config/env.js';
 import redisClient from './config/redis.js';
 import {
@@ -9,6 +10,7 @@ import {
   jobNotificationScheduler,
   jobPipelineService,
   jobSourceManager,
+  jobCollectionService,
 } from './config/services.js';
 
 const app = express();
@@ -18,6 +20,7 @@ app.use(express.json());
 app.use(responseFormatter);
 
 app.use('/jobs/pipeline', jobPipelineRouter);
+app.use('/jobs/collection', jobCollectionRouter);
 
 app.get('/', (_req, res) => {
   res.success({
@@ -28,6 +31,7 @@ app.get('/', (_req, res) => {
 app.get('/health', (_req, res) => {
   const schedulerStatus = jobNotificationScheduler.getSchedulerStatus();
   const lastPipelineStats = jobPipelineService.getLastStats();
+  const lastCollectionStats = jobCollectionService.getLastStats();
   const failedSources = jobSourceManager.getLastFailedSources();
 
   res.success({
@@ -54,6 +58,7 @@ app.get('/health', (_req, res) => {
             errors: lastPipelineStats.errors,
           }
         : null,
+      lastCollectionStats: lastCollectionStats ?? null,
       sources: {
         active: activeJobSources.map((s) => s.type),
         failedLastRun: failedSources,
