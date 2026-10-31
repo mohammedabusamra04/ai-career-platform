@@ -1,6 +1,8 @@
 /**
- * TASK-27.1: Text Sanitization & Safe HTML Stripping
- * Integrates sanitized text, clean URLs, and stripped HTML into Job Normalizer.
+ * TASK-27: Job Normalization & Sanitization
+ * Integrates:
+ * - TASK-27.1: Text Sanitization & Safe HTML Stripping (stripHtml, cleanUrl, sanitizeSingleLine)
+ * - TASK-27.2: Location & Timestamp Standardization (parsePublicationDate, normalizeLocation)
  */
 
 import type { ExperienceLevel, WorkType } from '../../shared/types/job.js';
@@ -10,6 +12,8 @@ import {
   stripHtml,
   cleanUrl,
   sanitizeSingleLine,
+  parsePublicationDate,
+  normalizeLocation,
 } from './job.sanitizer.js';
 
 export interface RawJob {
@@ -29,8 +33,9 @@ export interface RawJob {
   description?: string;
   skills?: string[];
 
-  publicationDate?: string | Date;
-  publishedAt?: string | Date;
+  /** Accepts ISO strings, epoch numbers, RFC-2822, relative strings, or Date objects */
+  publicationDate?: string | number | Date;
+  publishedAt?: string | number | Date;
 
   salaryMin?: number;
   salaryMax?: number;
@@ -38,18 +43,36 @@ export interface RawJob {
 }
 
 export function normalizeJob(rawJob: RawJob): Job {
+  const scrapedAt = new Date();
+
+  // --- URLs (TASK-27.1: strip UTM params, validate) ---
   const applicationUrl =
     cleanUrl(rawJob.applicationUrl || rawJob.url) ||
     (rawJob.applicationUrl || rawJob.url || '').trim();
-  const pubDate = normalizeDate(rawJob.publishedAt || rawJob.publicationDate);
+
+  // --- Publication Date (TASK-27.2: multi-format parser) ---
+  const pubDate = parsePublicationDate(
+    rawJob.publishedAt ?? rawJob.publicationDate,
+    scrapedAt,
+  );
+
+  // --- Description (TASK-27.1: safe HTML stripping & entity decoding) ---
   const cleanDescription = rawJob.description
     ? stripHtml(rawJob.description)
     : undefined;
 
+  // --- Location (TASK-27.2: location & country standardization) ---
+  const loc = normalizeLocation(rawJob.location, rawJob.remote);
+
+  // Inferred or explicit remote flag
   const isRemote =
     rawJob.remote ??
-    (rawJob.workType === 'remote' ||
+    (loc.isRemote ||
+      rawJob.workType === 'remote' ||
       /remote|عن بعد|telecommute/i.test(`${rawJob.title ?? ''} ${rawJob.location ?? ''}`));
+
+  // Prefer explicit country from source, otherwise inferred country code
+  const country = rawJob.country?.trim() || loc.country;
 
   return {
     title: sanitizeSingleLine(rawJob.title),
@@ -58,8 +81,8 @@ export function normalizeJob(rawJob: RawJob): Job {
     applicationUrl,
     url: applicationUrl,
 
-    location: rawJob.location?.trim(),
-    country: rawJob.country?.trim(),
+    location: loc.location || rawJob.location?.trim(),
+    country,
     remote: isRemote,
 
     workType: rawJob.workType,
@@ -75,15 +98,6 @@ export function normalizeJob(rawJob: RawJob): Job {
     salaryMax: typeof rawJob.salaryMax === 'number' ? rawJob.salaryMax : undefined,
     currency: rawJob.currency?.trim(),
 
-    scrapedAt: new Date(),
+    scrapedAt,
   };
-}
-
-function normalizeDate(value?: string | Date): Date {
-  if (!value) {
-    return new Date();
-  }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
