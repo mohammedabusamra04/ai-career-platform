@@ -12,9 +12,11 @@ import {
   formatDurationMs,
   DEFAULT_SANITIZATION_TIMEOUT_MS,
   URL_NORMALIZATION_CACHE_TTL_MS,
+  parsePublicationDate,
+  normalizeLocation,
 } from '../../src/modules/jobs/job.sanitizer.js';
 
-describe('TASK-27.1: job.sanitizer', () => {
+describe('TASK-27.1: Text Sanitization & Safe HTML Stripping', () => {
   describe('HTML stripping and entity decoding', () => {
     it('meets acceptance criteria: strips HTML and decodes &amp;', () => {
       const input = '<p>Senior Backend <b>Engineer</b> &amp; Team Lead</p>';
@@ -120,6 +122,163 @@ describe('TASK-27.1: job.sanitizer', () => {
       expect(formatDurationMs(500)).toBe('500ms');
       expect(formatDurationMs(2500)).toBe('3s');
       expect(formatDurationMs(60000)).toBe('1m');
+    });
+  });
+});
+
+describe('TASK-27.2: Location & Timestamp Standardization', () => {
+  const fixedNow = new Date('2026-10-31T12:00:00.000Z');
+
+  describe('parsePublicationDate', () => {
+    it('meets acceptance criteria: converts ISO-8601 strings to valid Date', () => {
+      const date = parsePublicationDate('2026-10-15T12:00:00Z', fixedNow);
+      expect(date).toBeInstanceOf(Date);
+      expect(date.toISOString()).toBe('2026-10-15T12:00:00.000Z');
+    });
+
+    it('meets acceptance criteria: converts RFC-2822 date strings to valid Date', () => {
+      const date = parsePublicationDate('Wed, 14 Oct 2026 10:00:00 GMT', fixedNow);
+      expect(date).toBeInstanceOf(Date);
+      expect(date.toISOString()).toBe('2026-10-14T10:00:00.000Z');
+    });
+
+    it('meets acceptance criteria: converts epoch in seconds to valid Date', () => {
+      const date = parsePublicationDate(1792000000, fixedNow);
+      expect(date).toBeInstanceOf(Date);
+      expect(date.getTime()).toBe(1792000000 * 1000);
+    });
+
+    it('converts epoch string and epoch in milliseconds to valid Date', () => {
+      const fromStr = parsePublicationDate('1792000000', fixedNow);
+      expect(fromStr.getTime()).toBe(1792000000 * 1000);
+
+      const fromMs = parsePublicationDate(1792000000000, fixedNow);
+      expect(fromMs.getTime()).toBe(1792000000000);
+    });
+
+    it('parses relative Arabic date expressions correctly', () => {
+      const twoHoursAgo = parsePublicationDate('منذ ساعتين', fixedNow);
+      expect(twoHoursAgo.getTime()).toBe(fixedNow.getTime() - ms('2h'));
+
+      const threeHoursAgo = parsePublicationDate('منذ 3 ساعات', fixedNow);
+      expect(threeHoursAgo.getTime()).toBe(fixedNow.getTime() - ms('3h'));
+
+      const twoDaysAgo = parsePublicationDate('منذ يومين', fixedNow);
+      expect(twoDaysAgo.getTime()).toBe(fixedNow.getTime() - ms('2d'));
+
+      const threeDaysAgo = parsePublicationDate('منذ 3 أيام', fixedNow);
+      expect(threeDaysAgo.getTime()).toBe(fixedNow.getTime() - ms('3d'));
+
+      const oneWeekAgo = parsePublicationDate('منذ أسبوع', fixedNow);
+      expect(oneWeekAgo.getTime()).toBe(fixedNow.getTime() - ms('7d'));
+
+      const twoWeeksAgo = parsePublicationDate('منذ أسبوعين', fixedNow);
+      expect(twoWeeksAgo.getTime()).toBe(fixedNow.getTime() - ms('14d'));
+
+      const oneMonthAgo = parsePublicationDate('منذ شهر', fixedNow);
+      expect(oneMonthAgo.getTime()).toBe(fixedNow.getTime() - ms('30d'));
+
+      const today = parsePublicationDate('اليوم', fixedNow);
+      expect(today.getTime()).toBe(fixedNow.getTime());
+    });
+
+    it('parses relative English date expressions correctly using ms library', () => {
+      const justNow = parsePublicationDate('just now', fixedNow);
+      expect(justNow.getTime()).toBe(fixedNow.getTime());
+
+      const yesterday = parsePublicationDate('yesterday', fixedNow);
+      expect(yesterday.getTime()).toBe(fixedNow.getTime() - ms('1d'));
+
+      const twoHours = parsePublicationDate('2 hours ago', fixedNow);
+      expect(twoHours.getTime()).toBe(fixedNow.getTime() - ms('2h'));
+
+      const threeDays = parsePublicationDate('3 days ago', fixedNow);
+      expect(threeDays.getTime()).toBe(fixedNow.getTime() - ms('3d'));
+
+      const oneWeek = parsePublicationDate('1 week ago', fixedNow);
+      expect(oneWeek.getTime()).toBe(fixedNow.getTime() - ms('7d'));
+
+      const oneMonth = parsePublicationDate('1 month ago', fixedNow);
+      expect(oneMonth.getTime()).toBe(fixedNow.getTime() - ms('30d'));
+    });
+
+    it('defaults missing or unparseable dates to scrapedAt timestamp', () => {
+      expect(parsePublicationDate(undefined, fixedNow).getTime()).toBe(fixedNow.getTime());
+      expect(parsePublicationDate(null, fixedNow).getTime()).toBe(fixedNow.getTime());
+      expect(parsePublicationDate('', fixedNow).getTime()).toBe(fixedNow.getTime());
+      expect(parsePublicationDate('invalid-gibberish-date', fixedNow).getTime()).toBe(fixedNow.getTime());
+    });
+  });
+
+  describe('normalizeLocation', () => {
+    it('normalizes Arab region locations and extracts city and ISO country code', () => {
+      const riyadh = normalizeLocation('Riyadh, Saudi Arabia');
+      expect(riyadh.city).toBe('Riyadh');
+      expect(riyadh.country).toBe('SA');
+      expect(riyadh.isRemote).toBe(false);
+
+      const dubai = normalizeLocation('Dubai, United Arab Emirates');
+      expect(dubai.city).toBe('Dubai');
+      expect(dubai.country).toBe('AE');
+      expect(dubai.isRemote).toBe(false);
+
+      const cairo = normalizeLocation('Cairo, Egypt');
+      expect(cairo.city).toBe('Cairo');
+      expect(cairo.country).toBe('EG');
+
+      const amman = normalizeLocation('Amman, Jordan');
+      expect(amman.city).toBe('Amman');
+      expect(amman.country).toBe('JO');
+
+      const kuwait = normalizeLocation('Kuwait City, Kuwait');
+      expect(kuwait.city).toBe('Kuwait City');
+      expect(kuwait.country).toBe('KW');
+    });
+
+    it('normalizes international locations and extracts city and ISO country code', () => {
+      const london = normalizeLocation('London, UK');
+      expect(london.city).toBe('London');
+      expect(london.country).toBe('GB');
+
+      const berlin = normalizeLocation('Berlin, Germany');
+      expect(berlin.city).toBe('Berlin');
+      expect(berlin.country).toBe('DE');
+
+      const sf = normalizeLocation('San Francisco, USA');
+      expect(sf.city).toBe('San Francisco');
+      expect(sf.country).toBe('US');
+
+      const toronto = normalizeLocation('Toronto, Canada');
+      expect(toronto.city).toBe('Toronto');
+      expect(toronto.country).toBe('CA');
+    });
+
+    it('detects remote indicators in both Arabic and English', () => {
+      const engRemote = normalizeLocation('Remote - Work from anywhere');
+      expect(engRemote.isRemote).toBe(true);
+
+      const arabRemote = normalizeLocation('الرياض - العمل عن بعد');
+      expect(arabRemote.isRemote).toBe(true);
+      expect(arabRemote.city).toBe('Riyadh');
+      expect(arabRemote.country).toBe('SA');
+
+      const homeRemote = normalizeLocation('Cairo, Egypt (Work from home)');
+      expect(homeRemote.isRemote).toBe(true);
+      expect(homeRemote.city).toBe('Cairo');
+      expect(homeRemote.country).toBe('EG');
+    });
+
+    it('honors explicitRemote parameter', () => {
+      const loc = normalizeLocation('London, UK', true);
+      expect(loc.isRemote).toBe(true);
+      expect(loc.country).toBe('GB');
+    });
+
+    it('handles empty or undefined inputs safely', () => {
+      const empty = normalizeLocation(undefined);
+      expect(empty.location).toBe('');
+      expect(empty.isRemote).toBe(false);
+      expect(empty.country).toBeUndefined();
     });
   });
 });
