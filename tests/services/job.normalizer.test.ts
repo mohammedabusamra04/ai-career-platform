@@ -3,7 +3,7 @@ import { normalizeJob } from '../../src/modules/jobs/job.normalizer.js';
 import { JobSourceType } from '../../src/modules/jobs/job.types.js';
 import { WorkType } from '../../src/shared/types/job.js';
 
-describe('normalizeJob', () => {
+describe('normalizeJob (TASK-27.1 integration)', () => {
   it('should trim string fields and set default values', () => {
     const raw = {
       title: '  Senior Backend Developer  ',
@@ -51,16 +51,38 @@ describe('normalizeJob', () => {
     expect(job2.remote).toBe(true);
   });
 
-  it('should strip HTML tags from descriptions', () => {
+  it('should strip HTML tags from descriptions while preserving line breaks', () => {
     const job = normalizeJob({
       title: 'DevOps Engineer',
       company: 'Cloud Corp',
       url: 'https://cloud.com/job/3',
-      description: '<p>Looking for <strong>AWS</strong> &amp; <em>Docker</em> expert.</p>',
+      description: '<p>Looking for <strong>AWS</strong> &amp; <em>Docker</em> expert.</p><p>Apply now!</p>',
     });
 
     expect(job.description).not.toContain('<p>');
     expect(job.description).not.toContain('<strong>');
-    expect(job.description).toContain('Looking for');
+    expect(job.description).toContain('Looking for AWS & Docker expert.\nApply now!');
+  });
+
+  it('should strip UTM tracking params from applicationUrl and url', () => {
+    const job = normalizeJob({
+      title: 'Lead Architect',
+      company: 'Enterprise Inc',
+      url: 'https://jobs.example.com/view/456?utm_source=linkedin&utm_medium=cpc&id=456',
+    });
+
+    expect(job.url).toBe('https://jobs.example.com/view/456?id=456');
+    expect(job.applicationUrl).toBe('https://jobs.example.com/view/456?id=456');
+  });
+
+  it('should sanitize HTML and entities from title and company', () => {
+    const job = normalizeJob({
+      title: '<h3>Principal &amp; Staff Engineer</h3>',
+      company: '<b>Acme Corp &amp; Partners</b>',
+      url: 'https://example.com/job/789',
+    });
+
+    expect(job.title).toBe('Principal & Staff Engineer');
+    expect(job.company).toBe('Acme Corp & Partners');
   });
 });
