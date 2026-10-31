@@ -1,6 +1,16 @@
+/**
+ * TASK-27.1: Text Sanitization & Safe HTML Stripping
+ * Integrates sanitized text, clean URLs, and stripped HTML into Job Normalizer.
+ */
+
 import type { ExperienceLevel, WorkType } from '../../shared/types/job.js';
 
 import { Job, JobSourceType } from './job.types.js';
+import {
+  stripHtml,
+  cleanUrl,
+  sanitizeSingleLine,
+} from './job.sanitizer.js';
 
 export interface RawJob {
   title?: string;
@@ -28,13 +38,12 @@ export interface RawJob {
 }
 
 export function normalizeJob(rawJob: RawJob): Job {
-  const applicationUrl = (rawJob.applicationUrl || rawJob.url || '').trim();
+  const applicationUrl =
+    cleanUrl(rawJob.applicationUrl || rawJob.url) ||
+    (rawJob.applicationUrl || rawJob.url || '').trim();
   const pubDate = normalizeDate(rawJob.publishedAt || rawJob.publicationDate);
   const cleanDescription = rawJob.description
-    ? rawJob.description
-        .replace(/<[^>]*>?/gm, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
+    ? stripHtml(rawJob.description)
     : undefined;
 
   const isRemote =
@@ -43,8 +52,8 @@ export function normalizeJob(rawJob: RawJob): Job {
       /remote|عن بعد|telecommute/i.test(`${rawJob.title ?? ''} ${rawJob.location ?? ''}`));
 
   return {
-    title: rawJob.title?.trim() ?? '',
-    company: rawJob.company?.trim() ?? '',
+    title: sanitizeSingleLine(rawJob.title),
+    company: sanitizeSingleLine(rawJob.company),
     source: rawJob.source ?? JobSourceType.OTHER,
     applicationUrl,
     url: applicationUrl,
