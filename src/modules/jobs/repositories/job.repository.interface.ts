@@ -31,6 +31,7 @@ export interface JobEntity {
   scrapedAt: Date;
   lastSeenAt: Date;
   status: JobStatus;
+  sourcesSeen?: string[];
 }
 
 export interface NormalizedJobInput {
@@ -57,6 +58,7 @@ export interface NormalizedJobInput {
   scrapedAt?: Date;
   lastSeenAt?: Date;
   status?: JobStatus;
+  sourcesSeen?: string[];
 }
 
 export interface JobFilter {
@@ -81,6 +83,7 @@ export interface IJobRepository {
   upsertJobWithResult(jobData: NormalizedJobInput): Promise<UpsertResult>;
   findById(id: string): Promise<JobEntity | null>;
   findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null>;
+  findBySemanticKey(semanticKey: string): Promise<JobEntity | null>;
   count(status?: JobStatus): Promise<number>;
   findActiveJobs(filter?: JobFilter): Promise<JobEntity[]>;
   expireStaleJobs(retentionDays?: number, now?: Date): Promise<number>;
