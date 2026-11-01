@@ -31,6 +31,7 @@ export interface JobEntity {
   scrapedAt: Date;
   lastSeenAt: Date;
   status: JobStatus;
+  sourcesSeen?: string[];
 }
 
 export interface NormalizedJobInput {
@@ -57,6 +58,7 @@ export interface NormalizedJobInput {
   scrapedAt?: Date;
   lastSeenAt?: Date;
   status?: JobStatus;
+  sourcesSeen?: string[];
 }
 
 export interface JobFilter {

@@ -11,6 +11,12 @@ import type {
   JobFilter,
   UpsertResult,
 } from './job.repository.interface.js';
+import {
+  selectPreferredLink,
+  mergeDescription,
+  mergeSalary,
+  mergeSkills,
+} from '../../deduplication/listing-merger.service.js';
 
 export const DEFAULT_JOB_RETENTION_DAYS = 21;
 
@@ -77,16 +83,35 @@ export class PrismaJobRepository implements IJobRepository {
         return { record: created, isNew: true };
       }
 
-      // Merge data preserving richer non-null fields
-      const mergedDescription =
-        jobData.description && jobData.description.trim().length > 0
+      // Merge data preserving richer non-null fields with intelligent precedence (TASK-28.3)
+      const isCrossSourceDuplicate = existing.deduplicationKey !== jobData.deduplicationKey;
+
+      const mergedDescription = isCrossSourceDuplicate
+        ? mergeDescription(jobData.description, existing.description)
+        : jobData.description && jobData.description.trim().length > 0
           ? jobData.description
           : existing.description;
 
-      const mergedSkills =
-        jobData.skills && jobData.skills.length > 0
-          ? Array.from(new Set([...existing.skills, ...jobData.skills]))
-          : existing.skills;
+      const mergedSkills = mergeSkills(existing.skills, jobData.skills);
+
+      const preferredUrl = selectPreferredLink(
+        jobData.url,
+        jobData.source,
+        existing.url,
+        existing.source,
+      );
+
+      const preferredApplicationUrl = selectPreferredLink(
+        jobData.applicationUrl,
+        jobData.source,
+        existing.applicationUrl,
+        existing.source,
+      );
+
+      const mergedSalary = mergeSalary(
+        { min: existing.salaryMin, max: existing.salaryMax, currency: existing.currency },
+        { min: jobData.salaryMin, max: jobData.salaryMax, currency: jobData.currency },
+      );
 
       const mergedRemoteScope =
         jobData.remoteScope && jobData.remoteScope !== 'UNKNOWN'
@@ -111,8 +136,8 @@ export class PrismaJobRepository implements IJobRepository {
           title: jobData.title || existing.title,
           company: jobData.company || existing.company,
           source: jobData.source || existing.source,
-          url: jobData.url || existing.url,
-          applicationUrl: jobData.applicationUrl ?? existing.applicationUrl,
+          url: preferredUrl || jobData.url || existing.url,
+          applicationUrl: preferredApplicationUrl || (jobData.applicationUrl ?? existing.applicationUrl),
           location: jobData.location ?? existing.location,
           country: jobData.country ?? existing.country,
           remoteScope: mergedRemoteScope,
@@ -123,9 +148,9 @@ export class PrismaJobRepository implements IJobRepository {
           workType: mergedWorkType,
           description: mergedDescription,
           skills: mergedSkills,
-          salaryMin: jobData.salaryMin ?? existing.salaryMin,
-          salaryMax: jobData.salaryMax ?? existing.salaryMax,
-          currency: jobData.currency ?? existing.currency,
+          salaryMin: mergedSalary.min,
+          salaryMax: mergedSalary.max,
+          currency: mergedSalary.currency,
           lastSeenAt: jobData.lastSeenAt ?? now,
         },
       });
