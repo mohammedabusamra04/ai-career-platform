@@ -26,11 +26,25 @@ export class PrismaJobRepository implements IJobRepository {
     const now = new Date();
 
     const { record, isNew } = await this.db.$transaction(async (tx) => {
-      const existing = await tx.job.findUnique({
+      // 1. Check for exact duplicate via Level 1 deduplicationKey
+      let existing = await tx.job.findUnique({
         where: {
           deduplicationKey: jobData.deduplicationKey,
         },
       });
+
+      // 2. If not found by Level 1, check active jobs by Level 2 semanticKey (cross-source duplicate)
+      if (!existing && jobData.semanticKey) {
+        existing = await tx.job.findFirst({
+          where: {
+            semanticKey: jobData.semanticKey,
+            status: 'ACTIVE',
+          },
+          orderBy: {
+            lastSeenAt: 'desc',
+          },
+        });
+      }
 
       if (!existing) {
         const created = await tx.job.create({
@@ -91,7 +105,7 @@ export class PrismaJobRepository implements IJobRepository {
 
       const updated = await tx.job.update({
         where: {
-          deduplicationKey: jobData.deduplicationKey,
+          deduplicationKey: existing.deduplicationKey,
         },
         data: {
           title: jobData.title || existing.title,
@@ -135,6 +149,20 @@ export class PrismaJobRepository implements IJobRepository {
   public async findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null> {
     const record = await this.db.job.findUnique({
       where: { deduplicationKey },
+    });
+
+    return record ? this.mapToEntity(record) : null;
+  }
+
+  public async findBySemanticKey(semanticKey: string): Promise<JobEntity | null> {
+    const record = await this.db.job.findFirst({
+      where: {
+        semanticKey,
+        status: 'ACTIVE',
+      },
+      orderBy: {
+        lastSeenAt: 'desc',
+      },
     });
 
     return record ? this.mapToEntity(record) : null;

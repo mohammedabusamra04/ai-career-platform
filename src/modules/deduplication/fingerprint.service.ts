@@ -4,12 +4,15 @@ import type { Job } from '../jobs/job.types.js';
 import { TRACKING_QUERY_PARAMS } from '../jobs/job.sanitizer.js';
 
 /**
- * TASK-28.1: Level 1 SHA-256 Composite Fingerprint Engine (#86)
+ * TASK-28: Two-Tier Deduplication & Rich Data Merger (#46)
+ * - TASK-28.1: Level 1 SHA-256 Composite Fingerprint Engine (#86)
+ * - TASK-28.2: Level 2 Cross-Source Semantic Fingerprint Engine (#87)
  *
- * Implements deterministic composite hashing for job postings:
- * Formula: SHA256(canonical(title) + "|" + canonical(company) + "|" + cleanUrl(url))
- *
- * Used as Job.deduplicationKey in PostgreSQL for O(1) duplicate detection.
+ * Implements:
+ * 1. Level 1: Deterministic composite hashing (deduplicationKey)
+ *    Formula: SHA256(canonical(title) + "|" + canonical(company) + "|" + cleanUrl(url))
+ * 2. Level 2: Cross-source semantic hashing (semanticKey)
+ *    Formula: SHA256(canonicalSemanticTitle(title) + "|" + canonicalCompany(company))
  */
 export class FingerprintService {
   /**
@@ -35,11 +38,13 @@ export class FingerprintService {
   }
 
   /**
-   * Generates a semantic fingerprint (Level 2) based only on normalized title and company
-   * to detect cross-source duplicates.
+   * Generates a semantic fingerprint (Level 2) based on canonical title variants and company.
+   * Enables consolidating duplicate listings posted across different job boards (e.g. Adzuna & Remotive).
+   *
+   * Formula: SHA256(canonicalSemanticTitle(title) + "|" + canonicalCompany(company))
    */
   generateSemanticFingerprint(job: Partial<Job>): string {
-    const canonicalTitle = this.canonicalizeTitle(job.title || '');
+    const canonicalTitle = this.canonicalizeSemanticTitle(job.title || '');
     const canonicalCompany = this.canonicalizeCompany(job.company || '');
 
     const data = `${canonicalTitle}|${canonicalCompany}`;
@@ -120,11 +125,11 @@ export class FingerprintService {
   }
 
   /**
-   * Canonicalizes a job title by:
-   * 1. Converting to lowercase
-   * 2. Removing noise tags like (m/f/d), (Remote), [Urgent], (عن بعد), etc.
-   * 3. Removing special characters and symbols while preserving unicode alphanumeric text
-   * 4. Collapsing whitespace
+   * Canonicalizes a job title for Level 1 exact composite matching:
+   * 1. Converts to lowercase
+   * 2. Removes noise tags like (m/f/d), (Remote), [Urgent], (عن بعد), etc.
+   * 3. Removes special characters and symbols while preserving unicode alphanumeric text
+   * 4. Collapses whitespace
    */
   canonicalizeTitle(title: string): string {
     if (!title || typeof title !== 'string') {
@@ -142,6 +147,76 @@ export class FingerprintService {
         /\[(?:remote|hybrid|onsite|urgent|full-time|part-time|عن\s*بعد|عمل\s*عن\s*بعد|دوام\s*كامل|دوام\s*جزئي)\]/gi,
         ' ',
       )
+      .replace(/[-_–—|#/]/g, ' ')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
+   * Canonicalizes a job title for Level 2 cross-source semantic matching (TASK-28.2).
+   * Maps common title variations, abbreviations, and technical role synonyms to a unified form.
+   *
+   * Examples:
+   * - "Sr. Back End Engineer" -> "senior backend engineer"
+   * - "Senior Backend Engineer" -> "senior backend engineer"
+   * - "Full-Stack Developer" -> "full stack developer"
+   * - "Fullstack Developer" -> "full stack developer"
+   */
+  canonicalizeSemanticTitle(title: string): string {
+    if (!title || typeof title !== 'string') {
+      return '';
+    }
+
+    let normalized = title.toLowerCase();
+
+    // 1. Remove noise tags in brackets or parentheses
+    normalized = normalized
+      .replace(
+        /\((?:m\/f\/d|m\/w\/d|w\/m\/d|f\/m\/d|remote|hybrid|onsite|urgent|عن\s*بعد|عمل\s*عن\s*بعد|دوام\s*كامل|دوام\s*جزئي)\)/gi,
+        ' ',
+      )
+      .replace(
+        /\[(?:remote|hybrid|onsite|urgent|full-time|part-time|عن\s*بعد|عمل\s*عن\s*بعد|دوام\s*كامل|دوام\s*جزئي)\]/gi,
+        ' ',
+      );
+
+    // 2. Canonicalize seniority and level prefixes / abbreviations
+    normalized = normalized
+      .replace(/\b(?:sr\.?|snr\.?|senior)\b/gi, 'senior')
+      .replace(/\b(?:jr\.?|jnr\.?|junior)\b/gi, 'junior')
+      .replace(/\b(?:mid[\s-]?level)\b/gi, 'mid');
+
+    // 3. Canonicalize specialization and domain title variants
+    normalized = normalized
+      .replace(/\b(?:back[\s-]?end)\b/gi, 'backend')
+      .replace(/\b(?:front[\s-]?end)\b/gi, 'frontend')
+      .replace(/\b(?:full[\s-]?stack|fullstack)\b/gi, 'full stack')
+      .replace(/\b(?:dev[\s-]?ops)\b/gi, 'devops')
+      .replace(/\b(?:quality[\s-]?assurance|q\.?a\.?)\b/gi, 'qa')
+      .replace(/\b(?:sde[\s-]?[i|1|2|3]?)\b/gi, 'software engineer')
+      .replace(/\b(?:software\s*development\s*engineer)\b/gi, 'software engineer')
+      .replace(/\b(?:machine[\s-]?learning|ml)\b/gi, 'machine learning')
+      .replace(/\b(?:artificial[\s-]?intelligence|ai)\b/gi, 'ai');
+
+    // 4. Canonicalize common framework names
+    normalized = normalized
+      .replace(/\b(?:node(?:\.js|js)?)\b/gi, 'node')
+      .replace(/\b(?:react(?:\.js|js)?)\b/gi, 'react')
+      .replace(/\b(?:vue(?:\.js|js)?)\b/gi, 'vue')
+      .replace(/\b(?:angular(?:\.js|js)?)\b/gi, 'angular')
+      .replace(/\b(?:next(?:\.js|js)?)\b/gi, 'next');
+
+    // 5. Arabic role and level normalization
+    normalized = normalized
+      .replace(/(?:^|\s)(?:سينيور|خبير|أول|اول)(?:\s|$)/gi, ' خبير ')
+      .replace(/(?:^|\s)(?:جونيور|مبتدئ)(?:\s|$)/gi, ' مبتدئ ')
+      .replace(/(?:^|\s)(?:واجهات\s*خلفية|باك\s*اند|باكيند)(?:\s|$)/gi, ' خلفي ')
+      .replace(/(?:^|\s)(?:واجهات\s*أمامية|واجهات\s*امامية|فرونت\s*اند|فرونتيند)(?:\s|$)/gi, ' أمامي ')
+      .replace(/(?:^|\s)(?:فل\s*ستاك|شامل)(?:\s|$)/gi, ' شامل ');
+
+    // 6. Clean punctuation, symbols, and collapse whitespace
+    return normalized
       .replace(/[-_–—|#/]/g, ' ')
       .replace(/[^\p{L}\p{N}\s]/gu, ' ')
       .replace(/\s+/g, ' ')

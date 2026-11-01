@@ -81,6 +81,7 @@ export interface IJobRepository {
   upsertJobWithResult(jobData: NormalizedJobInput): Promise<UpsertResult>;
   findById(id: string): Promise<JobEntity | null>;
   findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null>;
+  findBySemanticKey(semanticKey: string): Promise<JobEntity | null>;
   count(status?: JobStatus): Promise<number>;
   findActiveJobs(filter?: JobFilter): Promise<JobEntity[]>;
   expireStaleJobs(retentionDays?: number, now?: Date): Promise<number>;
