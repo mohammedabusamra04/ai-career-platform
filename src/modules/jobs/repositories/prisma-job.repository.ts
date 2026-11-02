@@ -9,7 +9,14 @@ import type {
   JobEntity,
   NormalizedJobInput,
   JobFilter,
+  UpsertResult,
 } from './job.repository.interface.js';
+import {
+  selectPreferredLink,
+  mergeDescription,
+  mergeSalary,
+  mergeSkills,
+} from '../../deduplication/listing-merger.service.js';
 
 export const DEFAULT_JOB_RETENTION_DAYS = 21;
 
@@ -17,17 +24,36 @@ export class PrismaJobRepository implements IJobRepository {
   constructor(private readonly db: PrismaClient = defaultPrisma) {}
 
   public async upsertJob(jobData: NormalizedJobInput): Promise<JobEntity> {
+    const result = await this.upsertJobWithResult(jobData);
+    return result.job;
+  }
+
+  public async upsertJobWithResult(jobData: NormalizedJobInput): Promise<UpsertResult> {
     const now = new Date();
 
-    const record = await this.db.$transaction(async (tx) => {
-      const existing = await tx.job.findUnique({
+    const { record, isNew } = await this.db.$transaction(async (tx) => {
+      // 1. Check for exact duplicate via Level 1 deduplicationKey
+      let existing = await tx.job.findUnique({
         where: {
           deduplicationKey: jobData.deduplicationKey,
         },
       });
 
+      // 2. If not found by Level 1, check active jobs by Level 2 semanticKey (cross-source duplicate)
+      if (!existing && jobData.semanticKey) {
+        existing = await tx.job.findFirst({
+          where: {
+            semanticKey: jobData.semanticKey,
+            status: 'ACTIVE',
+          },
+          orderBy: {
+            lastSeenAt: 'desc',
+          },
+        });
+      }
+
       if (!existing) {
-        return tx.job.create({
+        const created = await tx.job.create({
           data: {
             deduplicationKey: jobData.deduplicationKey,
             semanticKey: jobData.semanticKey,
@@ -54,18 +80,38 @@ export class PrismaJobRepository implements IJobRepository {
             status: jobData.status ?? 'ACTIVE',
           },
         });
+        return { record: created, isNew: true };
       }
 
-      // Merge data preserving richer non-null fields
-      const mergedDescription =
-        jobData.description && jobData.description.trim().length > 0
+      // Merge data preserving richer non-null fields with intelligent precedence (TASK-28.3)
+      const isCrossSourceDuplicate = existing.deduplicationKey !== jobData.deduplicationKey;
+
+      const mergedDescription = isCrossSourceDuplicate
+        ? mergeDescription(jobData.description, existing.description)
+        : jobData.description && jobData.description.trim().length > 0
           ? jobData.description
           : existing.description;
 
-      const mergedSkills =
-        jobData.skills && jobData.skills.length > 0
-          ? Array.from(new Set([...existing.skills, ...jobData.skills]))
-          : existing.skills;
+      const mergedSkills = mergeSkills(existing.skills, jobData.skills);
+
+      const preferredUrl = selectPreferredLink(
+        jobData.url,
+        jobData.source,
+        existing.url,
+        existing.source,
+      );
+
+      const preferredApplicationUrl = selectPreferredLink(
+        jobData.applicationUrl,
+        jobData.source,
+        existing.applicationUrl,
+        existing.source,
+      );
+
+      const mergedSalary = mergeSalary(
+        { min: existing.salaryMin, max: existing.salaryMax, currency: existing.currency },
+        { min: jobData.salaryMin, max: jobData.salaryMax, currency: jobData.currency },
+      );
 
       const mergedRemoteScope =
         jobData.remoteScope && jobData.remoteScope !== 'UNKNOWN'
@@ -82,16 +128,16 @@ export class PrismaJobRepository implements IJobRepository {
           ? jobData.workType
           : existing.workType;
 
-      return tx.job.update({
+      const updated = await tx.job.update({
         where: {
-          deduplicationKey: jobData.deduplicationKey,
+          deduplicationKey: existing.deduplicationKey,
         },
         data: {
           title: jobData.title || existing.title,
           company: jobData.company || existing.company,
           source: jobData.source || existing.source,
-          url: jobData.url || existing.url,
-          applicationUrl: jobData.applicationUrl ?? existing.applicationUrl,
+          url: preferredUrl || jobData.url || existing.url,
+          applicationUrl: preferredApplicationUrl || (jobData.applicationUrl ?? existing.applicationUrl),
           location: jobData.location ?? existing.location,
           country: jobData.country ?? existing.country,
           remoteScope: mergedRemoteScope,
@@ -102,15 +148,19 @@ export class PrismaJobRepository implements IJobRepository {
           workType: mergedWorkType,
           description: mergedDescription,
           skills: mergedSkills,
-          salaryMin: jobData.salaryMin ?? existing.salaryMin,
-          salaryMax: jobData.salaryMax ?? existing.salaryMax,
-          currency: jobData.currency ?? existing.currency,
+          salaryMin: mergedSalary.min,
+          salaryMax: mergedSalary.max,
+          currency: mergedSalary.currency,
           lastSeenAt: jobData.lastSeenAt ?? now,
         },
       });
+      return { record: updated, isNew: false };
     });
 
-    return this.mapToEntity(record);
+    return {
+      job: this.mapToEntity(record),
+      isNew,
+    };
   }
 
   public async findById(id: string): Promise<JobEntity | null> {
@@ -124,6 +174,20 @@ export class PrismaJobRepository implements IJobRepository {
   public async findByDeduplicationKey(deduplicationKey: string): Promise<JobEntity | null> {
     const record = await this.db.job.findUnique({
       where: { deduplicationKey },
+    });
+
+    return record ? this.mapToEntity(record) : null;
+  }
+
+  public async findBySemanticKey(semanticKey: string): Promise<JobEntity | null> {
+    const record = await this.db.job.findFirst({
+      where: {
+        semanticKey,
+        status: 'ACTIVE',
+      },
+      orderBy: {
+        lastSeenAt: 'desc',
+      },
     });
 
     return record ? this.mapToEntity(record) : null;
