@@ -33,10 +33,25 @@ app.get('/health', (_req, res) => {
   const lastPipelineStats = jobPipelineService.getLastStats();
   const lastCollectionStats = jobCollectionService.getLastStats();
   const failedSources = jobSourceManager.getLastFailedSources();
+  const sourceHealthMap =
+    typeof jobSourceManager.getSourceHealthMap === 'function'
+      ? jobSourceManager.getSourceHealthMap()
+      : {};
+  const overallSourceHealth =
+    typeof jobSourceManager.getOverallHealth === 'function'
+      ? jobSourceManager.getOverallHealth()
+      : 'HEALTHY';
+
+  let status: string = 'ok';
+  if (overallSourceHealth === 'UNHEALTHY') {
+    status = 'UNHEALTHY';
+  } else if (overallSourceHealth === 'DEGRADED') {
+    status = 'DEGRADED';
+  }
 
   res.success({
     data: {
-      status: 'ok',
+      status,
       uptime: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
       timezone: env.timezone,
@@ -59,7 +74,8 @@ app.get('/health', (_req, res) => {
           }
         : null,
       lastCollectionStats: lastCollectionStats ?? null,
-      sources: {
+      sources: sourceHealthMap,
+      sourcesSummary: {
         active: activeJobSources.map((s) => s.type),
         failedLastRun: failedSources,
         totalCount: activeJobSources.length,
