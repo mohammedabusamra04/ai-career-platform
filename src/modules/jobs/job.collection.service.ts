@@ -19,7 +19,7 @@ import logger from '../../shared/utils/logger.js';
 
 export interface SourceExecutionStat {
   source: string;
-  status: 'fulfilled' | 'rejected' | 'timeout';
+  status: 'fulfilled' | 'rejected' | 'timeout' | 'circuit_open';
   jobCount: number;
   durationMs: number;
   error?: string;
