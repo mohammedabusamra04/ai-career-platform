@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   DeterministicJobClassifier,
   deterministicJobClassifier,
+  NegativeExclusionMatcher,
+  negativeExclusionMatcher,
 } from '../../../src/modules/jobs/classifier/job.classifier.js';
 import {
   Specialization,
@@ -203,6 +205,100 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-30.2: Explicit Exclusion Negative Matcher (#92)', () => {
+    const exclusionMatcher = negativeExclusionMatcher;
+
+    it('evaluates exclusion directly via NegativeExclusionMatcher standalone', () => {
+      const res = exclusionMatcher.evaluate('QA Recruitment Consultant');
+      expect(res.isExcluded).toBe(true);
+      expect(res.matchedPattern).toBe('recruiter');
+    });
+
+    it('rejects QA Recruitment Consultant as NON_TECHNICAL / excluded (Test Spec #92)', () => {
+      const result = classifier.classify({
+        title: 'QA Recruitment Consultant',
+        skills: ['QA', 'Testing'],
+      });
+
+      expect(result.isExcluded).toBe(true);
+      expect(result.primarySpecialization).toBeNull();
+      expect(result.classificationMethod).toBe('NEGATIVE_EXCLUSION');
+      expect(result.confidence).toBe(1.0);
+    });
+
+    it('rejects Software Sales Account Executive as NON_TECHNICAL / excluded (Test Spec #92)', () => {
+      const result = classifier.classify({
+        title: 'Software Sales Account Executive',
+        skills: ['Sales', 'SaaS'],
+      });
+
+      expect(result.isExcluded).toBe(true);
+      expect(result.primarySpecialization).toBeNull();
+      expect(result.classificationMethod).toBe('NEGATIVE_EXCLUSION');
+    });
+
+    it('rejects DevOps Sales Manager despite containing DevOps keyword', () => {
+      const result = classifier.classify({
+        title: 'DevOps Sales Manager',
+      });
+
+      expect(result.isExcluded).toBe(true);
+      expect(result.classificationMethod).toBe('NEGATIVE_EXCLUSION');
+    });
+
+    it('rejects Technical Recruiter and Headhunter roles', () => {
+      const rec = classifier.classify({ title: 'Technical Recruiter (IT & Software)' });
+      expect(rec.isExcluded).toBe(true);
+
+      const talent = classifier.classify({ title: 'Talent Acquisition Specialist (Engineering)' });
+      expect(talent.isExcluded).toBe(true);
+    });
+
+    it('rejects Customer Support and Executive Assistant roles', () => {
+      const support = classifier.classify({ title: 'Customer Support Specialist (Technical Tier 1)' });
+      expect(support.isExcluded).toBe(true);
+
+      const ea = classifier.classify({ title: 'Executive Assistant to VP of Engineering' });
+      expect(ea.isExcluded).toBe(true);
+    });
+
+    it('rejects Content Writer and Copywriter roles', () => {
+      const writer = classifier.classify({ title: 'Technical Content Writer & Copywriter' });
+      expect(writer.isExcluded).toBe(true);
+    });
+
+    it('rejects Arabic non-technical roles', () => {
+      const hr = classifier.classify({ title: 'مسؤول توظيف تقني وموارد بشرية' });
+      expect(hr.isExcluded).toBe(true);
+
+      const sales = classifier.classify({ title: 'مندوب مبيعات برمجيات سحابية' });
+      expect(sales.isExcluded).toBe(true);
+
+      const cs = classifier.classify({ title: 'أخصائي خدمة عملاء ودعم فني' });
+      expect(cs.isExcluded).toBe(true);
+    });
+
+    it('prevents positive title classification from matching excluded roles', () => {
+      expect(classifier.classifyTitle('QA Recruitment Consultant')).toBeNull();
+      expect(classifier.classifyTitle('DevOps Sales Manager')).toBeNull();
+      expect(classifier.classifyTitle('Technical Recruiter')).toBeNull();
+    });
+
+    it('does NOT exclude legitimate engineering titles containing test/sales/support context', () => {
+      const qa = classifier.classify({ title: 'QA Automation Engineer' });
+      expect(qa.isExcluded).toBe(false);
+      expect(qa.primarySpecialization).toBe(Specialization.QA);
+
+      const devops = classifier.classify({ title: 'Senior DevOps Engineer' });
+      expect(devops.isExcluded).toBe(false);
+      expect(devops.primarySpecialization).toBe(Specialization.DEVOPS);
+
+      const backend = classifier.classify({ title: 'Backend Software Engineer' });
+      expect(backend.isExcluded).toBe(false);
+      expect(backend.primarySpecialization).toBe(Specialization.BACKEND);
+    });
+  });
+
   describe('TASK-30.1: 100-Job Benchmark Fixture Suite (>= 90% Accuracy Acceptance Criterion)', () => {
     interface BenchmarkCase {
       title: string;
@@ -353,12 +449,11 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
       const accuracyPercentage = (correctMatches / BENCHMARK_100_TITLES.length) * 100;
 
       if (failedMatches.length > 0) {
-        // Output details for any discrepancies
         console.warn(`Failed benchmark cases (${failedMatches.length}):`, failedMatches);
       }
 
       expect(accuracyPercentage).toBeGreaterThanOrEqual(90);
-      expect(accuracyPercentage).toBe(100); // Expecting 100% on curated benchmark!
+      expect(accuracyPercentage).toBe(100);
     });
   });
 

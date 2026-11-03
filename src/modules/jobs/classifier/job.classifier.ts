@@ -5,6 +5,13 @@ import {
   WorkType,
 } from '@prisma/client';
 import type { Job } from '../job.types.js';
+import {
+  NegativeExclusionMatcher,
+  negativeExclusionMatcher,
+  type ExclusionResult,
+} from './negative-exclusion.matcher.js';
+
+export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
 
 export interface TitleClassificationResult {
   primarySpecialization: Specialization;
@@ -15,14 +22,16 @@ export interface TitleClassificationResult {
 }
 
 export interface ClassificationResult {
-  primarySpecialization: Specialization;
+  primarySpecialization: Specialization | null;
   secondarySpecialization: Specialization | null;
   remoteScope: RemoteScope;
   experienceLevel: ExperienceLevel;
   workType: WorkType;
   confidence: number;
-  classificationMethod: 'RULE_TITLE' | 'RULE_DESCRIPTION' | 'AI_FALLBACK' | 'DEFAULT';
+  classificationMethod: 'RULE_TITLE' | 'RULE_DESCRIPTION' | 'AI_FALLBACK' | 'DEFAULT' | 'NEGATIVE_EXCLUSION';
   matchedTokens?: string[];
+  isExcluded?: boolean;
+  exclusionReason?: string;
 }
 
 interface TokenEntry {
@@ -32,6 +41,10 @@ interface TokenEntry {
 }
 
 export class DeterministicJobClassifier {
+  constructor(
+    private readonly exclusionMatcher: NegativeExclusionMatcher = negativeExclusionMatcher,
+  ) {}
+
   /**
    * Pre-compiled Token Map for Title-First O(k) Classification (TASK-30.1).
    * Maps normalized n-grams (1-gram, 2-gram, 3-gram) to their specialization and weight.
@@ -340,12 +353,26 @@ export class DeterministicJobClassifier {
   ];
 
   /**
-   * Title-First Tokenized Rule Engine (TASK-30.1).
+   * Evaluates title against negative exclusion patterns (TASK-30.2).
+   */
+  public evaluateExclusion(title: string): ExclusionResult {
+    return this.exclusionMatcher.evaluate(title);
+  }
+
+  /**
+   * Title-First Tokenized Rule Engine (TASK-30.1 & TASK-30.2).
    * Fast O(k) evaluation over title n-grams (3-gram, 2-gram, 1-gram) with Map lookups.
+   * Prior to positive matching, evaluates explicit negative exclusions.
    * Execution time <0.1ms per title.
    */
   public classifyTitle(title: string): TitleClassificationResult | null {
     if (!title || !title.trim()) {
+      return null;
+    }
+
+    // 0. Prior Negative Exclusion Check (TASK-30.2)
+    const exclusion = this.exclusionMatcher.evaluate(title);
+    if (exclusion.isExcluded) {
       return null;
     }
 
@@ -438,6 +465,22 @@ export class DeterministicJobClassifier {
     const description = (job.description || '').trim();
     const skillsText = Array.isArray(job.skills) ? job.skills.join(' ') : '';
 
+    // 0. Prior Negative Exclusion Check (TASK-30.2)
+    const exclusion = this.exclusionMatcher.evaluate(title);
+    if (exclusion.isExcluded) {
+      return {
+        primarySpecialization: null,
+        secondarySpecialization: null,
+        remoteScope: RemoteScope.UNKNOWN,
+        experienceLevel: ExperienceLevel.UNKNOWN,
+        workType: WorkType.UNKNOWN,
+        confidence: 1.0,
+        classificationMethod: 'NEGATIVE_EXCLUSION',
+        isExcluded: true,
+        exclusionReason: exclusion.reason,
+      };
+    }
+
     // 1. Title-First Precedence (TASK-30.1)
     const titleMatch = this.classifyTitle(title);
 
@@ -506,6 +549,7 @@ export class DeterministicJobClassifier {
       confidence,
       classificationMethod,
       matchedTokens,
+      isExcluded: false,
     };
   }
 
