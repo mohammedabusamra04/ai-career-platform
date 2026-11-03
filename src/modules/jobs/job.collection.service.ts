@@ -147,6 +147,14 @@ export class JobCollectionService {
           const semanticKey = fpService.generateSemanticFingerprint(job);
           const classification = this.classifier.classify(job);
 
+          // Drop non-technical / excluded postings from shared pool (TASK-30.2)
+          if (classification.isExcluded || !classification.primarySpecialization) {
+            logger.info(
+              `[JobCollectionService] Dropping non-technical job: "${job.title}" (${classification.exclusionReason || 'Non-technical'})`,
+            );
+            continue;
+          }
+
           const input: NormalizedJobInput = {
             deduplicationKey,
             semanticKey,
