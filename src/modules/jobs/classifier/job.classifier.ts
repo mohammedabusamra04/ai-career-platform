@@ -188,6 +188,7 @@ export class DeterministicJobClassifier {
     ['k8s', { spec: Specialization.DEVOPS, weight: 75, isDirectRole: false }],
     ['docker', { spec: Specialization.DEVOPS, weight: 65, isDirectRole: false }],
     ['terraform', { spec: Specialization.DEVOPS, weight: 75, isDirectRole: false }],
+    ['aws', { spec: Specialization.DEVOPS, weight: 65, isDirectRole: false }],
     ['ci/cd', { spec: Specialization.DEVOPS, weight: 70, isDirectRole: false }],
 
     // ==========================================
@@ -236,6 +237,8 @@ export class DeterministicJobClassifier {
     ['test engineer', { spec: Specialization.QA, weight: 105, isDirectRole: true }],
     ['tester', { spec: Specialization.QA, weight: 90, isDirectRole: true }],
     ['sdet', { spec: Specialization.QA, weight: 120, isDirectRole: true }],
+    ['mobile qa engineer', { spec: Specialization.QA, weight: 125, isDirectRole: true }],
+    ['mobile qa', { spec: Specialization.QA, weight: 115, isDirectRole: true }],
     ['software test', { spec: Specialization.QA, weight: 100, isDirectRole: true }],
     ['qc engineer', { spec: Specialization.QA, weight: 100, isDirectRole: true }],
     ['qc', { spec: Specialization.QA, weight: 85, isDirectRole: false }],
@@ -244,6 +247,7 @@ export class DeterministicJobClassifier {
     ['selenium', { spec: Specialization.QA, weight: 70, isDirectRole: false }],
     ['cypress', { spec: Specialization.QA, weight: 70, isDirectRole: false }],
     ['playwright', { spec: Specialization.QA, weight: 70, isDirectRole: false }],
+    ['appium', { spec: Specialization.QA, weight: 80, isDirectRole: false }],
 
     // ==========================================
     // SECURITY (Cybersecurity, Infosec, Penetration Tester, AppSec)
@@ -264,7 +268,7 @@ export class DeterministicJobClassifier {
     ['ai engineer', { spec: Specialization.AI_ENGINEER, weight: 125, isDirectRole: true }],
     ['ai developer', { spec: Specialization.AI_ENGINEER, weight: 120, isDirectRole: true }],
     ['machine learning', { spec: Specialization.AI_ENGINEER, weight: 110, isDirectRole: true }],
-    ['machine learning engineer', { spec: Specialization.AI_ENGINEER, weight: 130, isDirectRole: true }],
+    ['machine learning engineer', { spec: Specialization.AI_ENGINEER, weight: 125, isDirectRole: true }],
     ['ml engineer', { spec: Specialization.AI_ENGINEER, weight: 120, isDirectRole: true }],
     ['deep learning', { spec: Specialization.AI_ENGINEER, weight: 105, isDirectRole: true }],
     ['nlp', { spec: Specialization.AI_ENGINEER, weight: 80, isDirectRole: false }],
@@ -347,7 +351,7 @@ export class DeterministicJobClassifier {
       spec: Specialization.BACKEND,
       titleRegex:
         /\b(?:backend|back-end|back end|rust|golang|node(?:\.js)?|python|java|php|ruby|\.net|c#|laravel|django|spring boot|api engineer|api developer)\b/i,
-      skillsRegex: /\b(?:rust|node\.js|express|nest\.js|python|fastapi|django|golang|java|spring|c#|\.net|php|laravel|postgres|mongodb|redis)\b/i,
+      skillsRegex: /\b(?:rust|node\.js|express|nest\.js|python|fastapi|django|golang|java|spring|c#|\.net|php|laravel|postgres(?:ql)?|mongodb|redis)\b/i,
       weight: 8,
     },
   ];
@@ -360,10 +364,10 @@ export class DeterministicJobClassifier {
   }
 
   /**
-   * Title-First Tokenized Rule Engine (TASK-30.1 & TASK-30.2).
+   * Title-First Tokenized Rule Engine (TASK-30.1, TASK-30.2, TASK-30.3).
    * Fast O(k) evaluation over title n-grams (3-gram, 2-gram, 1-gram) with Map lookups.
-   * Prior to positive matching, evaluates explicit negative exclusions.
-   * Execution time <0.1ms per title.
+   * Evaluates negative exclusions prior to matching.
+   * Assigns required primary specialization and optional secondary specialization.
    */
   public classifyTitle(title: string): TitleClassificationResult | null {
     if (!title || !title.trim()) {
@@ -386,15 +390,21 @@ export class DeterministicJobClassifier {
     const scores = new Map<Specialization, number>();
     const matchedTokens: string[] = [];
 
-    // 2. Scan n-grams: 3-grams, 2-grams, 1-grams
-    for (let i = 0; i < words.length; i++) {
+    // 2. Scan n-grams: 3-grams, 2-grams, 1-grams with longest-match and head primacy (TASK-30.3)
+    let i = 0;
+    let isFirstMatch = true;
+    while (i < words.length) {
       // 3-gram
       if (i + 2 < words.length) {
         const triGram = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
         const entry = DeterministicJobClassifier.TOKEN_MAP.get(triGram);
         if (entry) {
-          scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight);
+          const positionBoost = isFirstMatch ? 60 : 0;
+          scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight + positionBoost);
           matchedTokens.push(triGram);
+          isFirstMatch = false;
+          i += 3;
+          continue;
         }
       }
 
@@ -403,8 +413,12 @@ export class DeterministicJobClassifier {
         const biGram = `${words[i]} ${words[i + 1]}`;
         const entry = DeterministicJobClassifier.TOKEN_MAP.get(biGram);
         if (entry) {
-          scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight);
+          const positionBoost = isFirstMatch ? 60 : 0;
+          scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight + positionBoost);
           matchedTokens.push(biGram);
+          isFirstMatch = false;
+          i += 2;
+          continue;
         }
       }
 
@@ -412,9 +426,15 @@ export class DeterministicJobClassifier {
       const uniGram = words[i];
       const entry = DeterministicJobClassifier.TOKEN_MAP.get(uniGram);
       if (entry) {
-        scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight);
+        const positionBoost = isFirstMatch ? 60 : 0;
+        scores.set(entry.spec, (scores.get(entry.spec) || 0) + entry.weight + positionBoost);
         matchedTokens.push(uniGram);
+        isFirstMatch = false;
+        i += 1;
+        continue;
       }
+
+      i++;
     }
 
     if (scores.size === 0) {
@@ -423,8 +443,32 @@ export class DeterministicJobClassifier {
 
     const sorted = Array.from(scores.entries()).sort((a, b) => b[1] - a[1]);
     const primarySpecialization = sorted[0][0];
-    const secondarySpecialization =
-      sorted.length > 1 && sorted[1][0] !== primarySpecialization ? sorted[1][0] : null;
+
+    // 3. TASK-30.3: Primary and Secondary Specialization Assignment
+    let secondarySpecialization: Specialization | null = null;
+
+    if (sorted.length > 1) {
+      const candidates = sorted.slice(1);
+
+      if (primarySpecialization === Specialization.FULLSTACK) {
+        // Empirical rule: For Fullstack roles, subordinate frontend/backend stack mentions
+        // (React, Node, etc.) are intrinsic components, not a distinct secondary discipline.
+        // A secondary specialization is only assigned if a distinct domain (DevOps, Mobile, etc.) is present.
+        const distinctCandidate = candidates.find(
+          ([spec, score]) =>
+            spec !== Specialization.FRONTEND &&
+            spec !== Specialization.BACKEND &&
+            score >= 60,
+        );
+        secondarySpecialization = distinctCandidate ? distinctCandidate[0] : null;
+      } else {
+        // Minimum score threshold (>= 60) required for a genuine secondary discipline
+        const second = candidates[0];
+        if (second && second[1] >= 60) {
+          secondarySpecialization = second[0];
+        }
+      }
+    }
 
     return {
       primarySpecialization,
@@ -456,6 +500,9 @@ export class DeterministicJobClassifier {
     // Normalize dashes surrounded by spaces
     text = text.replace(/\s+-\s+/g, ' ');
 
+    // Normalize Arabic conjunction 'و' (waw) attached to role stems (e.g. 'وذكاء' -> 'ذكاء')
+    text = text.replace(/(?:^|\s)و(ذكاء|بيانات|أمن|امن|تصميم|تطوير|محلل|مهندس|سحابية|نظم)/g, ' $1');
+
     // Collapse multiple whitespace
     return text.trim();
   }
@@ -481,7 +528,7 @@ export class DeterministicJobClassifier {
       };
     }
 
-    // 1. Title-First Precedence (TASK-30.1)
+    // 1. Title-First Precedence (TASK-30.1 & TASK-30.3)
     const titleMatch = this.classifyTitle(title);
 
     let primarySpecialization: Specialization;
@@ -502,12 +549,22 @@ export class DeterministicJobClassifier {
 
       for (const rule of DeterministicJobClassifier.SPECIALIZATION_RULES) {
         let score = 0;
-        if (rule.skillsRegex && rule.skillsRegex.test(skillsText)) {
-          score += rule.weight * 2;
+        if (rule.skillsRegex) {
+          // Skills text matches (explicit skills array) carry 2x weight
+          const skillMatches = skillsText
+            ? (skillsText.match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length
+            : 0;
+          score += skillMatches * rule.weight * 2;
+
+          // Description skill occurrences
+          const descSkillMatches = (description.slice(0, 1500).match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length;
+          score += descSkillMatches * rule.weight;
         }
-        if (rule.titleRegex.test(description.slice(0, 500))) {
-          score += rule.weight;
-        }
+
+        // Title / role matches in description
+        const descTitleMatches = (description.slice(0, 1500).match(new RegExp(rule.titleRegex.source, 'gi')) || []).length;
+        score += descTitleMatches * rule.weight;
+
         if (score > 0) {
           scores.set(rule.spec, score);
         }
@@ -515,12 +572,27 @@ export class DeterministicJobClassifier {
 
       if (scores.size > 0) {
         const sortedSpecs = Array.from(scores.entries())
-          .sort((a, b) => b[1] - a[1])
-          .map(([spec]) => spec);
+          .sort((a, b) => b[1] - a[1]);
 
-        primarySpecialization = sortedSpecs[0];
-        secondarySpecialization =
-          sortedSpecs.length > 1 && sortedSpecs[1] !== primarySpecialization ? sortedSpecs[1] : null;
+        primarySpecialization = sortedSpecs[0][0];
+
+        if (sortedSpecs.length > 1) {
+          const second = sortedSpecs[1];
+          if (second[1] >= 16) {
+            if (primarySpecialization === Specialization.FULLSTACK) {
+              const distinct = sortedSpecs.slice(1).find(
+                ([spec, score]) =>
+                  spec !== Specialization.FRONTEND &&
+                  spec !== Specialization.BACKEND &&
+                  score >= 16,
+              );
+              secondarySpecialization = distinct ? distinct[0] : null;
+            } else {
+              secondarySpecialization = second[0];
+            }
+          }
+        }
+
         confidence = 0.75;
         classificationMethod = 'RULE_DESCRIPTION';
       } else {

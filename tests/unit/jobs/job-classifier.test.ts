@@ -299,6 +299,86 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-30.3: Primary and Secondary Specialization Assignment (#93)', () => {
+    it('classifies compound role "Data Scientist / Machine Learning Engineer" (Test Spec #93)', () => {
+      const result = classifier.classify({
+        title: 'Data Scientist / Machine Learning Engineer',
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.DATA);
+      expect(result.secondarySpecialization).toBe(Specialization.AI_ENGINEER);
+      expect(result.classificationMethod).toBe('RULE_TITLE');
+      expect(result.confidence).toBe(0.95);
+    });
+
+    it('classifies multi-disciplinary Fullstack + DevOps role with correct secondary assignment', () => {
+      const result = classifier.classify({
+        title: 'Full Stack Engineer (React/Node) with AWS/DevOps',
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.FULLSTACK);
+      expect(result.secondarySpecialization).toBe(Specialization.DEVOPS);
+    });
+
+    it('suppresses Frontend / Backend as secondary for pure Fullstack roles with component stacks', () => {
+      const result = classifier.classify({
+        title: 'Full Stack Developer (React / Node.js)',
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.FULLSTACK);
+      expect(result.secondarySpecialization).toBeNull();
+    });
+
+    it('assigns null secondary specialization for single-domain roles', () => {
+      const frontend = classifier.classify({
+        title: 'Senior React / Frontend Developer',
+      });
+      expect(frontend.primarySpecialization).toBe(Specialization.FRONTEND);
+      expect(frontend.secondarySpecialization).toBeNull();
+
+      const backend = classifier.classify({
+        title: 'Backend Golang Engineer',
+      });
+      expect(backend.primarySpecialization).toBe(Specialization.BACKEND);
+      expect(backend.secondarySpecialization).toBeNull();
+
+      const devops = classifier.classify({
+        title: 'Site Reliability Engineer (Kubernetes)',
+      });
+      expect(devops.primarySpecialization).toBe(Specialization.DEVOPS);
+      expect(devops.secondarySpecialization).toBeNull();
+    });
+
+    it('classifies compound Backend & DevOps role', () => {
+      const result = classifier.classify({
+        title: 'Backend Engineer & DevOps Specialist',
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.BACKEND);
+      expect(result.secondarySpecialization).toBe(Specialization.DEVOPS);
+    });
+
+    it('handles Arabic compound titles with primary and secondary assignment', () => {
+      const result = classifier.classify({
+        title: 'مهندس بيانات وذكاء اصطناعي',
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.DATA);
+      expect(result.secondarySpecialization).toBe(Specialization.AI_ENGINEER);
+    });
+
+    it('assigns primary and secondary via description rule fallback when title is generic', () => {
+      const result = classifier.classify({
+        title: 'Software Engineer',
+        description: 'Looking for a senior developer proficient in Python, Django, PostgreSQL, and also managing AWS Kubernetes DevOps infrastructure.',
+      });
+
+      expect(result.classificationMethod).toBe('RULE_DESCRIPTION');
+      expect(result.primarySpecialization).toBe(Specialization.BACKEND);
+      expect(result.secondarySpecialization).toBe(Specialization.DEVOPS);
+    });
+  });
+
   describe('TASK-30.1: 100-Job Benchmark Fixture Suite (>= 90% Accuracy Acceptance Criterion)', () => {
     interface BenchmarkCase {
       title: string;
