@@ -12,6 +12,12 @@ import {
 } from './negative-exclusion.matcher.js';
 
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
+export {
+  GeminiAmbiguityResolver,
+  geminiAmbiguityResolver,
+  AIAmbiguityResolutionSchema,
+  type AIAmbiguityResolution,
+} from './gemini-ambiguity.resolver.js';
 
 export interface TitleClassificationResult {
   primarySpecialization: Specialization;

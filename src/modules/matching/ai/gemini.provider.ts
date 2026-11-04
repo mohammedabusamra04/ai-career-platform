@@ -342,6 +342,15 @@ Rules:
   }
 
   /**
+   * Generates raw text using the key-rotated, circuit-protected fallback chain.
+   * Leveraged by downstream components such as GeminiAmbiguityResolver (TASK-31.2).
+   */
+  public async generateText(prompt: string): Promise<string | undefined> {
+    const response = await this.generateWithFallback(prompt);
+    return response.text;
+  }
+
+  /**
    * Tries each (API key, model) slot in order, before giving up.
    *
    * A slot whose circuit is open (daily quota exhausted, or a recent
