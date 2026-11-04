@@ -9,6 +9,7 @@ import { FingerprintService } from '../deduplication/fingerprint.service.js';
 import {
   DeterministicJobClassifier,
   deterministicJobClassifier,
+  type AmbiguityResolver,
 } from './classifier/job.classifier.js';
 import {
   AdvisoryLockService,
@@ -57,6 +58,7 @@ export class JobCollectionService {
     private readonly fingerprintService?: FingerprintService,
     private readonly classifier: DeterministicJobClassifier = deterministicJobClassifier,
     private readonly advisoryLock: IAdvisoryLockService = new AdvisoryLockService(),
+    private readonly ambiguityResolver?: AmbiguityResolver,
   ) {}
 
   /**
@@ -145,7 +147,9 @@ export class JobCollectionService {
         for (const job of uniqueJobs) {
           const deduplicationKey = fpService.generate(job);
           const semanticKey = fpService.generateSemanticFingerprint(job);
-          const classification = this.classifier.classify(job);
+          const classification = this.ambiguityResolver
+            ? await this.classifier.classifyWithFallback(job, this.ambiguityResolver)
+            : this.classifier.classify(job);
 
           // Drop non-technical / excluded postings from shared pool (TASK-30.2)
           if (classification.isExcluded || !classification.primarySpecialization) {

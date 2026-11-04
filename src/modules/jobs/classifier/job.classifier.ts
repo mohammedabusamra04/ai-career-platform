@@ -12,6 +12,12 @@ import {
 } from './negative-exclusion.matcher.js';
 
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
+export {
+  GeminiAmbiguityResolver,
+  geminiAmbiguityResolver,
+  AIAmbiguityResolutionSchema,
+  type AIAmbiguityResolution,
+} from './gemini-ambiguity.resolver.js';
 
 export interface TitleClassificationResult {
   primarySpecialization: Specialization;
@@ -28,10 +34,36 @@ export interface ClassificationResult {
   experienceLevel: ExperienceLevel;
   workType: WorkType;
   confidence: number;
-  classificationMethod: 'RULE_TITLE' | 'RULE_DESCRIPTION' | 'AI_FALLBACK' | 'DEFAULT' | 'NEGATIVE_EXCLUSION';
+  classificationMethod:
+    | 'RULE_TITLE'
+    | 'RULE_DESCRIPTION'
+    | 'AI_FALLBACK'
+    | 'DEFAULT'
+    | 'NEGATIVE_EXCLUSION'
+    | 'UNRESOLVED';
   matchedTokens?: string[];
   isExcluded?: boolean;
   exclusionReason?: string;
+}
+
+/**
+ * Ambiguity Resolver Contract (TASK-31.1).
+ * Isolates third-party AI provider behind a strict interface.
+ */
+export interface AmbiguityResolutionInput {
+  title: string;
+  description?: string;
+  skills?: string[];
+}
+
+export interface AmbiguityResolutionOutput {
+  specialization: Specialization | null;
+  confidence: number;
+  reasoning?: string;
+}
+
+export interface AmbiguityResolver {
+  resolve(input: AmbiguityResolutionInput): Promise<AmbiguityResolutionOutput>;
 }
 
 interface TokenEntry {
@@ -258,6 +290,11 @@ export class DeterministicJobClassifier {
     ['pentester', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
     ['soc analyst', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
     ['security engineer', { spec: Specialization.SECURITY, weight: 120, isDirectRole: true }],
+    ['security architect', { spec: Specialization.SECURITY, weight: 120, isDirectRole: true }],
+    ['security specialist', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
+    ['information security', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
+    ['cybersecurity analyst', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
+    ['security analyst', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
     ['appsec', { spec: Specialization.SECURITY, weight: 110, isDirectRole: true }],
     ['أمن سيبراني', { spec: Specialization.SECURITY, weight: 115, isDirectRole: true }],
     ['أمن معلومات', { spec: Specialization.SECURITY, weight: 115, isDirectRole: true }],
@@ -531,7 +568,7 @@ export class DeterministicJobClassifier {
     // 1. Title-First Precedence (TASK-30.1 & TASK-30.3)
     const titleMatch = this.classifyTitle(title);
 
-    let primarySpecialization: Specialization;
+    let primarySpecialization: Specialization | null;
     let secondarySpecialization: Specialization | null = null;
     let confidence: number;
     let classificationMethod: 'RULE_TITLE' | 'RULE_DESCRIPTION' | 'AI_FALLBACK' | 'DEFAULT';
@@ -545,30 +582,7 @@ export class DeterministicJobClassifier {
       matchedTokens = titleMatch.matchedTokens;
     } else {
       // Fallback: evaluate description and skills using rule weights
-      const scores = new Map<Specialization, number>();
-
-      for (const rule of DeterministicJobClassifier.SPECIALIZATION_RULES) {
-        let score = 0;
-        if (rule.skillsRegex) {
-          // Skills text matches (explicit skills array) carry 2x weight
-          const skillMatches = skillsText
-            ? (skillsText.match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length
-            : 0;
-          score += skillMatches * rule.weight * 2;
-
-          // Description skill occurrences
-          const descSkillMatches = (description.slice(0, 1500).match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length;
-          score += descSkillMatches * rule.weight;
-        }
-
-        // Title / role matches in description
-        const descTitleMatches = (description.slice(0, 1500).match(new RegExp(rule.titleRegex.source, 'gi')) || []).length;
-        score += descTitleMatches * rule.weight;
-
-        if (score > 0) {
-          scores.set(rule.spec, score);
-        }
-      }
+      const scores = this.scoreDescription(description, skillsText);
 
       if (scores.size > 0) {
         const sortedSpecs = Array.from(scores.entries())
@@ -596,9 +610,9 @@ export class DeterministicJobClassifier {
         confidence = 0.75;
         classificationMethod = 'RULE_DESCRIPTION';
       } else {
-        primarySpecialization = Specialization.BACKEND;
+        primarySpecialization = null;
         secondarySpecialization = null;
-        confidence = 0.5;
+        confidence = 0;
         classificationMethod = 'DEFAULT';
       }
     }
@@ -623,6 +637,134 @@ export class DeterministicJobClassifier {
       matchedTokens,
       isExcluded: false,
     };
+  }
+
+  /**
+   * Scores job description and skills against specialization rules.
+   */
+  public scoreDescription(description: string, skillsText: string = ''): Map<Specialization, number> {
+    const scores = new Map<Specialization, number>();
+
+    for (const rule of DeterministicJobClassifier.SPECIALIZATION_RULES) {
+      let score = 0;
+      if (rule.skillsRegex) {
+        // Skills text matches (explicit skills array) carry 2x weight
+        const skillMatches = skillsText
+          ? (skillsText.match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length
+          : 0;
+        score += skillMatches * rule.weight * 2;
+
+        // Description skill occurrences
+        const descSkillMatches = (description.slice(0, 1500).match(new RegExp(rule.skillsRegex.source, 'gi')) || []).length;
+        score += descSkillMatches * rule.weight;
+      }
+
+      // Title / role matches in description
+      const descTitleMatches = (description.slice(0, 1500).match(new RegExp(rule.titleRegex.source, 'gi')) || []).length;
+      score += descTitleMatches * rule.weight;
+
+      if (score > 0) {
+        scores.set(rule.spec, score);
+      }
+    }
+
+    return scores;
+  }
+
+  /**
+   * Evaluates whether a job requires AI ambiguity resolution (TASK-31.1).
+   *
+   * Strictly avoids AI calls for:
+   * - Jobs with high-confidence title matches (RULE_TITLE with confidence >= 0.8).
+   * - Jobs excluded as non-technical (NEGATIVE_EXCLUSION).
+   *
+   * Triggers AI ONLY when:
+   * 1. Deterministic rules return UNRESOLVED (null specialization or DEFAULT method with 0 matches).
+   * 2. Deterministic rules detect severe title vs description conflict.
+   */
+  public isAmbiguous(job: Partial<Job>, result?: ClassificationResult): boolean {
+    const classification = result || this.classify(job);
+
+    // 1. Excluded non-technical jobs are never ambiguous (they are dropped at source)
+    if (classification.isExcluded) {
+      return false;
+    }
+
+    // 2. Trigger Condition 1: Deterministic rules return UNRESOLVED (null specialization or DEFAULT)
+    if (!classification.primarySpecialization || classification.classificationMethod === 'DEFAULT') {
+      return true;
+    }
+
+    // 3. Trigger Condition 2: Severe title vs description conflict
+    // If description is present and strongly indicates a conflicting specialization with zero support for title domain
+    if (job.description && job.description.length >= 50) {
+      const descScores = this.scoreDescription(job.description);
+      if (descScores.size > 0) {
+        const sortedDesc = Array.from(descScores.entries()).sort((a, b) => b[1] - a[1]);
+        const topDescSpec = sortedDesc[0][0];
+        const topDescScore = sortedDesc[0][1];
+        const titleSpecScore = descScores.get(classification.primarySpecialization) || 0;
+
+        // Severe conflict: top description specialization has strong evidence (>= 16 pts)
+        // AND contradicts the title specialization, with higher evidence than title specialization
+        const isFullstackComponent =
+          classification.primarySpecialization === Specialization.FULLSTACK &&
+          (topDescSpec === Specialization.FRONTEND || topDescSpec === Specialization.BACKEND);
+
+        if (
+          !isFullstackComponent &&
+          topDescSpec !== classification.primarySpecialization &&
+          topDescScore >= 16 &&
+          topDescScore > titleSpecScore
+        ) {
+          return true;
+        }
+      }
+    }
+
+    // 4. Prohibit AI invocation for unambiguous high-confidence title matches
+    if (classification.classificationMethod === 'RULE_TITLE' && classification.confidence >= 0.8) {
+      return false;
+    }
+
+    return false;
+  }
+
+  /**
+   * Asynchronously classifies a job with optional AI ambiguity resolution fallback (TASK-31.1).
+   * The ambiguityResolver is ONLY invoked when isAmbiguous() returns true.
+   * If the resolver fails or throws, gracefully retains the deterministic result without crashing.
+   */
+  public async classifyWithFallback(
+    job: Partial<Job>,
+    resolver?: AmbiguityResolver,
+  ): Promise<ClassificationResult> {
+    const deterministic = this.classify(job);
+
+    if (!resolver || !this.isAmbiguous(job, deterministic)) {
+      return deterministic;
+    }
+
+    try {
+      const resolution = await resolver.resolve({
+        title: job.title || '',
+        description: job.description,
+        skills: job.skills,
+      });
+
+      if (resolution && resolution.specialization) {
+        return {
+          ...deterministic,
+          primarySpecialization: resolution.specialization,
+          confidence: resolution.confidence ?? 0.85,
+          classificationMethod: 'AI_FALLBACK',
+        };
+      }
+    } catch {
+      // Graceful degradation: AI outage leaves deterministic result intact without throwing
+    }
+
+    return deterministic;
   }
 
   private resolveRemoteScope(job: Partial<Job>): RemoteScope {
