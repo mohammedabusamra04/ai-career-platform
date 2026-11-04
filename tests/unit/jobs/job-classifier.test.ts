@@ -5,7 +5,10 @@ import {
   NegativeExclusionMatcher,
   negativeExclusionMatcher,
   type AmbiguityResolver,
+  GeminiAmbiguityResolver,
+  AIAmbiguityResolutionSchema,
 } from '../../../src/modules/jobs/classifier/job.classifier.js';
+import type { TextGenerator } from '../../../src/modules/jobs/classifier/gemini-ambiguity.resolver.js';
 import {
   Specialization,
   RemoteScope,
@@ -575,6 +578,180 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
       // and never invoke AI providers.
       expect(classifier.isAmbiguous({ title: 'Senior Backend Engineer' })).toBe(false);
       expect(classifier.isAmbiguous({ title: 'Flutter Developer' })).toBe(false);
+    });
+  });
+
+  describe('TASK-31.2: Gemini Provider Integration with Zod Schema Validation (#95)', () => {
+    it('successfully parses and validates valid Gemini JSON response with Zod schema (Test Spec #95)', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        JSON.stringify({
+          specialization: 'DEVOPS',
+          confidence: 0.92,
+          reasoning: 'Role requires managing Kubernetes clusters and CI/CD pipelines.',
+        }),
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const result = await resolver.resolve({
+        title: 'Platform Infrastructure Lead',
+        description: 'Lead our cloud platform operations with Terraform and Helm.',
+      });
+
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      expect(result.specialization).toBe(Specialization.DEVOPS);
+      expect(result.confidence).toBe(0.92);
+      expect(result.reasoning).toBe('Role requires managing Kubernetes clusters and CI/CD pipelines.');
+    });
+
+    it('unwraps and parses JSON wrapped in markdown code fences', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        '```json\n{\n  "specialization": "DATA",\n  "confidence": 0.89,\n  "reasoning": "Strong emphasis on Snowflake and dbt ETL workflows."\n}\n```',
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const result = await resolver.resolve({
+        title: 'Modern Data Stack Specialist',
+        description: 'Build dbt models and Snowflake data warehouses.',
+      });
+
+      expect(result.specialization).toBe(Specialization.DATA);
+      expect(result.confidence).toBe(0.89);
+      expect(result.reasoning).toContain('Snowflake');
+    });
+
+    it('rejects invalid JSON safely without throwing and returns UNRESOLVED (Test Spec #95)', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        'Sorry, I could not classify this role because it is not technical.',
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const result = await resolver.resolve({
+        title: 'General Coordinator',
+        description: 'Coordinate office supplies.',
+      });
+
+      expect(result.specialization).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.reasoning).toBe('Malformed JSON from LLM');
+    });
+
+    it('rejects unknown or invalid specialization enums via Zod schema (Test Spec #95)', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        JSON.stringify({
+          specialization: 'BLOCKCHAIN_CRYPTO_DEV', // Invalid enum value
+          confidence: 0.95,
+          reasoning: 'Solidity and smart contract development.',
+        }),
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const result = await resolver.resolve({
+        title: 'Web3 Lead Engineer',
+        description: 'Build smart contracts.',
+      });
+
+      expect(result.specialization).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.reasoning).toContain('Zod validation error');
+    });
+
+    it('enforces input constraints (clean title + first 500 chars of description)', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        JSON.stringify({
+          specialization: 'BACKEND',
+          confidence: 0.85,
+          reasoning: 'Extracted backend signals.',
+        }),
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const veryLongDescription = 'a'.repeat(2000);
+      await resolver.resolve({
+        title: '   Senior Cloud Backend Engineer   ',
+        description: veryLongDescription,
+      });
+
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      const prompt = mockGenerateText.mock.calls[0][0];
+
+      // Title should be trimmed
+      expect(prompt).toContain('Job Title: Senior Cloud Backend Engineer');
+      // Description should be truncated to first 500 characters
+      expect(prompt).toContain('a'.repeat(500));
+      expect(prompt).not.toContain('a'.repeat(501));
+
+      // System instruction must match Issue #95 acceptance criteria
+      expect(prompt).toContain(
+        'SYSTEM: You are a job specialization classifier. Categorize the role into exactly one of the 10 allowed specializations.',
+      );
+    });
+
+    it('gracefully handles empty response from Gemini', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue('');
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const result = await resolver.resolve({ title: 'Lead Coordinator' });
+
+      expect(result.specialization).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.reasoning).toBe('Empty LLM response');
+    });
+
+    it('integrates seamlessly with classifyWithFallback in DeterministicJobClassifier', async () => {
+      const mockGenerateText = vi.fn().mockResolvedValue(
+        JSON.stringify({
+          specialization: 'AI_ENGINEER',
+          confidence: 0.91,
+          reasoning: 'Role involves training neural networks and deploying LLM agents.',
+        }),
+      );
+
+      const mockProvider: TextGenerator = {
+        generateText: mockGenerateText,
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: mockProvider });
+
+      const ambiguousJob = {
+        title: 'Applied Intelligence Specialist',
+        description: 'Researching novel transformer architectures and fine-tuning models.',
+      };
+
+      const result = await classifier.classifyWithFallback(ambiguousJob, resolver);
+
+      expect(result.primarySpecialization).toBe(Specialization.AI_ENGINEER);
+      expect(result.confidence).toBe(0.91);
+      expect(result.classificationMethod).toBe('AI_FALLBACK');
     });
   });
 
