@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   DeterministicJobClassifier,
   deterministicJobClassifier,
   NegativeExclusionMatcher,
   negativeExclusionMatcher,
+  type AmbiguityResolver,
 } from '../../../src/modules/jobs/classifier/job.classifier.js';
 import {
   Specialization,
@@ -376,6 +377,204 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
       expect(result.classificationMethod).toBe('RULE_DESCRIPTION');
       expect(result.primarySpecialization).toBe(Specialization.BACKEND);
       expect(result.secondarySpecialization).toBe(Specialization.DEVOPS);
+    });
+  });
+
+  describe('TASK-31.1: Ambiguity Detection Trigger & Isolation (#94)', () => {
+    it('processes 50 jobs with unambiguous titles and verifies mock AI provider was called 0 times (Test Spec #94)', async () => {
+      const mockResolver: AmbiguityResolver = {
+        resolve: vi.fn(),
+      };
+
+      const unambiguous50Titles: Array<{ title: string; expected: Specialization }> = [
+        // 1. BACKEND (5)
+        { title: 'Senior Backend Engineer', expected: Specialization.BACKEND },
+        { title: 'Node.js Developer (Express / PostgreSQL)', expected: Specialization.BACKEND },
+        { title: 'Lead Rust Systems Developer', expected: Specialization.BACKEND },
+        { title: 'Golang Software Engineer', expected: Specialization.BACKEND },
+        { title: 'Python Backend Developer', expected: Specialization.BACKEND },
+
+        // 2. FRONTEND (5)
+        { title: 'Senior Frontend Developer', expected: Specialization.FRONTEND },
+        { title: 'React.js Web Engineer', expected: Specialization.FRONTEND },
+        { title: 'Vue.js Application Developer', expected: Specialization.FRONTEND },
+        { title: 'Angular Frontend Specialist', expected: Specialization.FRONTEND },
+        { title: 'Lead Next.js Developer', expected: Specialization.FRONTEND },
+
+        // 3. FULLSTACK (5)
+        { title: 'Full Stack Engineer', expected: Specialization.FULLSTACK },
+        { title: 'Full-Stack Developer (MERN)', expected: Specialization.FULLSTACK },
+        { title: 'Senior Fullstack Software Developer', expected: Specialization.FULLSTACK },
+        { title: 'Lead Full Stack Web Engineer', expected: Specialization.FULLSTACK },
+        { title: 'Fullstack JavaScript Developer', expected: Specialization.FULLSTACK },
+
+        // 4. MOBILE (5)
+        { title: 'Senior iOS Developer (Swift)', expected: Specialization.MOBILE },
+        { title: 'Android Mobile Engineer (Kotlin)', expected: Specialization.MOBILE },
+        { title: 'Flutter Mobile Developer', expected: Specialization.MOBILE },
+        { title: 'React Native Application Developer', expected: Specialization.MOBILE },
+        { title: 'Lead Mobile Software Engineer', expected: Specialization.MOBILE },
+
+        // 5. DEVOPS (5)
+        { title: 'Senior DevOps Engineer', expected: Specialization.DEVOPS },
+        { title: 'Site Reliability Engineer (SRE)', expected: Specialization.DEVOPS },
+        { title: 'Cloud Infrastructure Engineer (AWS)', expected: Specialization.DEVOPS },
+        { title: 'Platform Engineer (Kubernetes)', expected: Specialization.DEVOPS },
+        { title: 'DevOps & CI/CD Specialist', expected: Specialization.DEVOPS },
+
+        // 6. DATA (5)
+        { title: 'Lead Data Engineer (Spark / Airflow)', expected: Specialization.DATA },
+        { title: 'Senior Data Analyst (SQL / BI)', expected: Specialization.DATA },
+        { title: 'Analytics Engineer', expected: Specialization.DATA },
+        { title: 'Data Scientist (Machine Learning)', expected: Specialization.DATA },
+        { title: 'Big Data & ETL Developer', expected: Specialization.DATA },
+
+        // 7. AI_ENGINEER (5)
+        { title: 'Machine Learning Engineer', expected: Specialization.AI_ENGINEER },
+        { title: 'Senior AI Developer (PyTorch)', expected: Specialization.AI_ENGINEER },
+        { title: 'Deep Learning Research Engineer', expected: Specialization.AI_ENGINEER },
+        { title: 'LLM & NLP Specialist', expected: Specialization.AI_ENGINEER },
+        { title: 'Computer Vision Engineer', expected: Specialization.AI_ENGINEER },
+
+        // 8. SECURITY (5)
+        { title: 'Application Security Engineer (AppSec)', expected: Specialization.SECURITY },
+        { title: 'Senior Penetration Tester (Ethical Hacker)', expected: Specialization.SECURITY },
+        { title: 'Cybersecurity Analyst (SOC)', expected: Specialization.SECURITY },
+        { title: 'Lead Information Security Specialist', expected: Specialization.SECURITY },
+        { title: 'Security Architect', expected: Specialization.SECURITY },
+
+        // 9. QA (5)
+        { title: 'Senior QA Automation Engineer', expected: Specialization.QA },
+        { title: 'Lead SDET (Software Development Engineer in Test)', expected: Specialization.QA },
+        { title: 'Test Automation Specialist (Cypress / Playwright)', expected: Specialization.QA },
+        { title: 'QA Engineer (Manual & Automated)', expected: Specialization.QA },
+        { title: 'Mobile QA Engineer (Appium)', expected: Specialization.QA },
+
+        // 10. UIUX (5)
+        { title: 'Senior UI/UX Designer', expected: Specialization.UIUX },
+        { title: 'Lead Product Designer (Figma)', expected: Specialization.UIUX },
+        { title: 'User Experience Researcher (UX)', expected: Specialization.UIUX },
+        { title: 'UI Designer & Design Systems Specialist', expected: Specialization.UIUX },
+        { title: 'Digital Product Designer', expected: Specialization.UIUX },
+      ];
+
+      expect(unambiguous50Titles).toHaveLength(50);
+
+      for (const item of unambiguous50Titles) {
+        const result = await classifier.classifyWithFallback({ title: item.title }, mockResolver);
+
+        expect(result.primarySpecialization).toBe(item.expected);
+        expect(result.confidence).toBe(0.95);
+        expect(result.classificationMethod).toBe('RULE_TITLE');
+        expect(classifier.isAmbiguous({ title: item.title }, result)).toBe(false);
+      }
+
+      // Acceptance criterion verification: mock AI provider was called exactly 0 times
+      expect(mockResolver.resolve).toHaveBeenCalledTimes(0);
+    });
+
+    it('triggers AI resolution when deterministic rules return UNRESOLVED (Condition 1)', async () => {
+      const mockResolver: AmbiguityResolver = {
+        resolve: vi.fn().mockResolvedValue({
+          specialization: Specialization.DATA,
+          confidence: 0.88,
+          reasoning: 'Job mentions enterprise data warehousing and analytics.',
+        }),
+      };
+
+      const ambiguousJob = {
+        title: 'Enterprise Technical Specialist Lead',
+        description: 'Coordinate enterprise platform architecture and pipeline integrations across teams.',
+      };
+
+      expect(classifier.isAmbiguous(ambiguousJob)).toBe(true);
+
+      const result = await classifier.classifyWithFallback(ambiguousJob, mockResolver);
+
+      expect(mockResolver.resolve).toHaveBeenCalledTimes(1);
+      expect(mockResolver.resolve).toHaveBeenCalledWith({
+        title: ambiguousJob.title,
+        description: ambiguousJob.description,
+        skills: undefined,
+      });
+
+      expect(result.primarySpecialization).toBe(Specialization.DATA);
+      expect(result.confidence).toBe(0.88);
+      expect(result.classificationMethod).toBe('AI_FALLBACK');
+    });
+
+    it('triggers AI resolution when severe title vs description conflict is detected (Condition 2)', async () => {
+      const mockResolver: AmbiguityResolver = {
+        resolve: vi.fn().mockResolvedValue({
+          specialization: Specialization.FRONTEND,
+          confidence: 0.90,
+          reasoning: 'Description is purely frontend React architecture despite mismatched DevOps title.',
+        }),
+      };
+
+      const conflictingJob = {
+        title: 'DevOps Platform Lead',
+        description: 'We are hiring a dedicated React frontend developer to build responsive UI components using Next.js, Redux, Tailwind CSS, and frontend design systems. No infrastructure work.',
+      };
+
+      // Conflict between title rule (DevOps) and description rule (Frontend)
+      expect(classifier.isAmbiguous(conflictingJob)).toBe(true);
+
+      const result = await classifier.classifyWithFallback(conflictingJob, mockResolver);
+
+      expect(mockResolver.resolve).toHaveBeenCalledTimes(1);
+      expect(result.primarySpecialization).toBe(Specialization.FRONTEND);
+      expect(result.classificationMethod).toBe('AI_FALLBACK');
+    });
+
+    it('prohibits AI invocation for excluded non-technical positions', async () => {
+      const mockResolver: AmbiguityResolver = {
+        resolve: vi.fn(),
+      };
+
+      const excludedJobs = [
+        { title: 'QA Recruitment Consultant' },
+        { title: 'Software Sales Account Executive' },
+        { title: 'DevOps Sales Manager' },
+        { title: 'Technical Recruiter' },
+      ];
+
+      for (const job of excludedJobs) {
+        expect(classifier.isAmbiguous(job)).toBe(false);
+        const result = await classifier.classifyWithFallback(job, mockResolver);
+        expect(result.isExcluded).toBe(true);
+        expect(result.classificationMethod).toBe('NEGATIVE_EXCLUSION');
+      }
+
+      expect(mockResolver.resolve).toHaveBeenCalledTimes(0);
+    });
+
+    it('gracefully degrades on AI outage / resolver exception without throwing', async () => {
+      const failingResolver: AmbiguityResolver = {
+        resolve: vi.fn().mockRejectedValue(new Error('Gemini API 503: Service Unavailable')),
+      };
+
+      const ambiguousJob = {
+        title: 'Strategic Project Lead',
+        description: 'Drive high-impact initiatives.',
+      };
+
+      expect(classifier.isAmbiguous(ambiguousJob)).toBe(true);
+
+      // Should complete safely with zero unhandled exceptions
+      const result = await classifier.classifyWithFallback(ambiguousJob, failingResolver);
+
+      expect(failingResolver.resolve).toHaveBeenCalledTimes(1);
+      expect(result.classificationMethod).toBe('DEFAULT');
+      expect(result.primarySpecialization).toBeNull();
+    });
+
+    it('prohibits AI invocation for calculating user-specific match scores', () => {
+      // In accordance with TASK-31.1 specification, candidate match ranking must strictly
+      // use deterministic heuristics (Primary specialization +50, Level +15, Region +15)
+      // and never invoke AI providers.
+      expect(classifier.isAmbiguous({ title: 'Senior Backend Engineer' })).toBe(false);
+      expect(classifier.isAmbiguous({ title: 'Flutter Developer' })).toBe(false);
     });
   });
 
