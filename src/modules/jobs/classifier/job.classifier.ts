@@ -34,7 +34,13 @@ export interface ClassificationResult {
   experienceLevel: ExperienceLevel;
   workType: WorkType;
   confidence: number;
-  classificationMethod: 'RULE_TITLE' | 'RULE_DESCRIPTION' | 'AI_FALLBACK' | 'DEFAULT' | 'NEGATIVE_EXCLUSION';
+  classificationMethod:
+    | 'RULE_TITLE'
+    | 'RULE_DESCRIPTION'
+    | 'AI_FALLBACK'
+    | 'DEFAULT'
+    | 'NEGATIVE_EXCLUSION'
+    | 'UNRESOLVED';
   matchedTokens?: string[];
   isExcluded?: boolean;
   exclusionReason?: string;

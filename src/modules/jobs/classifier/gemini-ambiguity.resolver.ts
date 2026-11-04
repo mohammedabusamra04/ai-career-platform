@@ -32,6 +32,9 @@ export interface TextGenerator {
  */
 export class GeminiAmbiguityResolver implements AmbiguityResolver {
   private provider: TextGenerator | null = null;
+  private readonly timeoutMs: number;
+
+  public static readonly DEFAULT_TIMEOUT_MS = 5000;
 
   public static readonly SYSTEM_PROMPT =
     'You are a job specialization classifier. Categorize the role into exactly one of the 10 allowed specializations.';
@@ -49,10 +52,11 @@ export class GeminiAmbiguityResolver implements AmbiguityResolver {
     Specialization.UIUX,
   ];
 
-  constructor(options?: { provider?: TextGenerator }) {
+  constructor(options?: { provider?: TextGenerator; timeoutMs?: number }) {
     if (options?.provider) {
       this.provider = options.provider;
     }
+    this.timeoutMs = options?.timeoutMs ?? GeminiAmbiguityResolver.DEFAULT_TIMEOUT_MS;
   }
 
   private getProvider(): TextGenerator {
@@ -65,7 +69,8 @@ export class GeminiAmbiguityResolver implements AmbiguityResolver {
   /**
    * Resolves job specialization by prompting Gemini with clean title and first 500 chars of description.
    * Validates response strictly against AIAmbiguityResolutionSchema.
-   * On validation error or failure, returns { specialization: null, confidence: 0 } without throwing.
+   * Wrapped in a 5-second timeout (TASK-31.3) to prevent pipeline blockage during AI latency.
+   * On validation error, timeout, or failure, returns { specialization: null, confidence: 0 } without throwing.
    */
   public async resolve(input: AmbiguityResolutionInput): Promise<AmbiguityResolutionOutput> {
     const cleanTitle = (input.title || '').trim();
@@ -75,7 +80,10 @@ export class GeminiAmbiguityResolver implements AmbiguityResolver {
 
     try {
       const provider = this.getProvider();
-      const rawText = await provider.generateText(prompt);
+      const rawText = await this.executeWithTimeout(
+        provider.generateText(prompt),
+        this.timeoutMs,
+      );
 
       if (!rawText || !rawText.trim()) {
         logger.warn(`[GeminiAmbiguityResolver] Empty response received for title: "${cleanTitle}"`);
@@ -96,6 +104,25 @@ export class GeminiAmbiguityResolver implements AmbiguityResolver {
         confidence: 0,
         reasoning: err instanceof Error ? err.message : 'AI outage',
       };
+    }
+  }
+
+  /**
+   * Wraps a promise in a timeout guard.
+   * Rejects early if execution exceeds timeoutMs.
+   */
+  private async executeWithTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`AI resolution timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
