@@ -524,6 +524,29 @@ Rules:
           });
         }
 
+        const isInvalidKey =
+          errorMessage.includes('API_KEY_INVALID') ||
+          errorMessage.includes('API key not valid') ||
+          (status === 400 && errorMessage.toLowerCase().includes('api key')) ||
+          status === 401;
+
+        if (isInvalidKey) {
+          logger.warn(
+            `Gemini API key #${slot.keyIndex} is invalid. Opening circuit.`,
+          );
+
+          this.openCircuit(
+            slot,
+            GeminiProvider.DAILY_QUOTA_COOLDOWN_MS,
+            'invalid-api-key',
+          );
+
+          throw new AIProviderError('Gemini API key invalid', {
+            skipped: true,
+            reason: 'invalid-api-key',
+          });
+        }
+
         const isRetryable = status === 503 || status === 429 || status === 500;
 
         if (!isRetryable || attempt === maxRetries) {
