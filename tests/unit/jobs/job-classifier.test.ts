@@ -985,4 +985,81 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
       expect(result.workType).toBe(WorkType.FULL_TIME);
     });
   });
+
+  describe('TASK-31.3: Graceful Degradation on AI Outage (#96)', () => {
+    it('aborts with timeout and returns UNRESOLVED when AI provider exceeds timeoutMs', async () => {
+      // Mock provider that hangs/delays
+      const hangingProvider = {
+        generateText: vi.fn().mockImplementation(
+          () => new Promise((resolve) => setTimeout(() => resolve('{"specialization":"BACKEND"}'), 100)),
+        ),
+      };
+
+      const resolver = new GeminiAmbiguityResolver({
+        provider: hangingProvider,
+        timeoutMs: 25, // 25ms timeout for fast test execution
+      });
+
+      const outcome = await resolver.resolve({
+        title: 'Technical Solutions Architect Lead',
+        description: 'Lead enterprise architecture solutions.',
+      });
+
+      expect(outcome.specialization).toBeNull();
+      expect(outcome.confidence).toBe(0);
+      expect(outcome.reasoning).toContain('timed out');
+    });
+
+    it('returns UNRESOLVED on AI provider network errors or invalid keys without throwing', async () => {
+      const failingProvider = {
+        generateText: vi.fn().mockRejectedValue(new Error('GoogleGenAI: API_KEY_INVALID')),
+      };
+
+      const resolver = new GeminiAmbiguityResolver({ provider: failingProvider });
+
+      const outcome = await resolver.resolve({
+        title: 'Enterprise Technical Specialist',
+      });
+
+      expect(outcome.specialization).toBeNull();
+      expect(outcome.confidence).toBe(0);
+      expect(outcome.reasoning).toContain('API_KEY_INVALID');
+    });
+
+    it('leaves ambiguous jobs as UNRESOLVED when AI fails in classifyWithFallback', async () => {
+      const failingResolver: AmbiguityResolver = {
+        resolve: vi.fn().mockRejectedValue(new Error('AI Outage 503')),
+      };
+
+      const ambiguousJob = {
+        title: 'General Technical Coordinator',
+        description: 'Coordinate across general business teams.',
+      };
+
+      const result = await classifier.classifyWithFallback(ambiguousJob, failingResolver);
+
+      expect(result.primarySpecialization).toBeNull();
+      expect(result.confidence).toBe(0);
+      expect(result.classificationMethod).toBe('DEFAULT');
+    });
+
+    it('keeps deterministic classification intact and unaffected during AI outage', async () => {
+      const failingResolver: AmbiguityResolver = {
+        resolve: vi.fn().mockRejectedValue(new Error('Total AI Outage')),
+      };
+
+      const deterministicJob = {
+        title: 'Senior React Frontend Developer',
+        skills: ['React', 'TypeScript'],
+      };
+
+      const result = await classifier.classifyWithFallback(deterministicJob, failingResolver);
+
+      // AI resolver was NOT even called because title-first deterministic classification was high-confidence
+      expect(failingResolver.resolve).toHaveBeenCalledTimes(0);
+      expect(result.primarySpecialization).toBe(Specialization.FRONTEND);
+      expect(result.confidence).toBe(0.95);
+      expect(result.classificationMethod).toBe('RULE_TITLE');
+    });
+  });
 });
