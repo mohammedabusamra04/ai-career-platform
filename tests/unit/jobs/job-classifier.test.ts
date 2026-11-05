@@ -1080,6 +1080,126 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-32.2: Contract & Employment Type Heuristic Engine (#98)', () => {
+    // Acceptance Test Spec from Issue #98
+    it('classifies "Freelance React Developer - 3 months contract" as CONTRACT (Test Spec #98)', () => {
+      const result = classifier.classify({
+        title: 'Freelance React Developer - 3 months contract',
+      });
+      expect(result.workType).toBe(WorkType.CONTRACT);
+    });
+
+    describe('English Work Type Title Tokens', () => {
+      it.each([
+        ['Fullstack Engineer (Contract)', WorkType.CONTRACT],
+        ['Freelance Node.js Developer', WorkType.CONTRACT],
+        ['Cloud Infrastructure Consultant', WorkType.CONTRACT],
+        ['Temporary Python Engineer', WorkType.CONTRACT],
+        ['Frontend Developer (6 months contract)', WorkType.CONTRACT],
+        ['Project-Based SRE Specialist', WorkType.CONTRACT],
+        ['Backend Developer (Part-Time)', WorkType.PART_TIME],
+        ['Part-Time UI/UX Designer', WorkType.PART_TIME],
+        ['Parttime Mobile Developer', WorkType.PART_TIME],
+        ['Software Engineering Intern', WorkType.INTERNSHIP],
+        ['AI / Machine Learning Trainee', WorkType.INTERNSHIP],
+        ['QA Automation Co-op Student', WorkType.INTERNSHIP],
+        ['Senior DevOps Engineer (Full-Time)', WorkType.FULL_TIME],
+        ['Permanent Java Developer', WorkType.FULL_TIME],
+        ['Direct-Hire Security Engineer', WorkType.FULL_TIME],
+      ])('classifies title "%s" as %s', (title, expectedType) => {
+        const result = classifier.classify({ title });
+        expect(result.workType).toBe(expectedType);
+      });
+    });
+
+    describe('Arabic Work Type Title Tokens', () => {
+      it.each([
+        ['مطور برمجيات (عقد مؤقت)', WorkType.CONTRACT],
+        ['مبرمج بايثون مستقل', WorkType.CONTRACT],
+        ['مهندس سحابي عمل حر', WorkType.CONTRACT],
+        ['مطور واجهات فريلانسر', WorkType.CONTRACT],
+        ['مطور واجهات دوام جزئي', WorkType.PART_TIME],
+        ['فاحص برمجيات عمل جزئي', WorkType.PART_TIME],
+        ['متدرب ذكاء اصطناعي', WorkType.INTERNSHIP],
+        ['تدريب تعاوني هندسة برمجيات', WorkType.INTERNSHIP],
+        ['مهندس نظم دوام كامل', WorkType.FULL_TIME],
+        ['مطور خلفيات وظيفة دائمة', WorkType.FULL_TIME],
+        ['تفرغ تام مطور تطبيقات', WorkType.FULL_TIME],
+      ])('classifies Arabic title "%s" as %s', (title, expectedType) => {
+        const result = classifier.classify({ title });
+        expect(result.workType).toBe(expectedType);
+      });
+    });
+
+    describe('Description Work Type Heuristics', () => {
+      it('classifies CONTRACT from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'React Developer',
+          description: 'This is a 6 months contract with potential for extension.',
+        });
+        expect(result.workType).toBe(WorkType.CONTRACT);
+      });
+
+      it('classifies FULL_TIME from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Backend Engineer',
+          description: 'Full-time position with comprehensive healthcare and 401k benefits.',
+        });
+        expect(result.workType).toBe(WorkType.FULL_TIME);
+      });
+
+      it('classifies PART_TIME from Arabic description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'مطور واجهات',
+          description: 'الفرصة عبارة عن عمل جزئي بمعدل 20 ساعة أسبوعياً.',
+        });
+        expect(result.workType).toBe(WorkType.PART_TIME);
+      });
+
+      it('classifies INTERNSHIP from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Data Analyst',
+          description: 'Summer internship program for university students.',
+        });
+        expect(result.workType).toBe(WorkType.INTERNSHIP);
+      });
+    });
+
+    describe('Precedence, Contradiction, and Conservative Fallback', () => {
+      it('prioritizes structured workType from source metadata when provided', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          workType: 'CONTRACT',
+        });
+        expect(result.workType).toBe(WorkType.CONTRACT);
+      });
+
+      it('normalizes source variations (e.g. FREELANCE -> CONTRACT, PERMANENT -> FULL_TIME)', () => {
+        expect(
+          classifier.classify({ title: 'Engineer', workType: 'FREELANCE' }).workType,
+        ).toBe(WorkType.CONTRACT);
+        expect(
+          classifier.classify({ title: 'Engineer', workType: 'PERMANENT' }).workType,
+        ).toBe(WorkType.FULL_TIME);
+      });
+
+      it('returns UNKNOWN when contradictory work type tokens are in title', () => {
+        const result = classifier.classify({
+          title: 'Full-time / Part-time Software Engineer',
+        });
+        expect(result.workType).toBe(WorkType.UNKNOWN);
+      });
+
+      it('leaves generic titles without work type cues as UNKNOWN (do not invent certainty)', () => {
+        const result = classifier.classify({
+          title: 'Backend Developer',
+          description: 'Build microservices and contribute to architectural decisions.',
+        });
+        expect(result.workType).toBe(WorkType.UNKNOWN);
+      });
+    });
+  });
+
   describe('Experience Level and Work Type Resolution', () => {
     it('detects Senior level from title', () => {
       const result = classifier.classify({
