@@ -11,7 +11,12 @@ import {
   type ExclusionResult,
 } from './negative-exclusion.matcher.js';
 
+import { SeniorityClassifier, seniorityClassifier } from './seniority.classifier.js';
+import { WorkTypeClassifier, workTypeClassifier } from './work-type.classifier.js';
+
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
+export { SeniorityClassifier, seniorityClassifier };
+export { WorkTypeClassifier, workTypeClassifier };
 export {
   GeminiAmbiguityResolver,
   geminiAmbiguityResolver,
@@ -75,6 +80,8 @@ interface TokenEntry {
 export class DeterministicJobClassifier {
   constructor(
     private readonly exclusionMatcher: NegativeExclusionMatcher = negativeExclusionMatcher,
+    private readonly seniorityEngine: SeniorityClassifier = seniorityClassifier,
+    private readonly workTypeEngine: WorkTypeClassifier = workTypeClassifier,
   ) {}
 
   /**
@@ -795,54 +802,11 @@ export class DeterministicJobClassifier {
   }
 
   private resolveExperienceLevel(job: Partial<Job>): ExperienceLevel {
-    if (job.experienceLevel) {
-      const upper = String(job.experienceLevel).toUpperCase();
-      if (upper === 'JUNIOR' || upper === 'ENTRY') return ExperienceLevel.JUNIOR;
-      if (upper === 'MID') return ExperienceLevel.MID;
-      if (upper === 'SENIOR' || upper === 'LEAD' || upper === 'PRINCIPAL') {
-        return ExperienceLevel.SENIOR;
-      }
-    }
-
-    const text = `${job.title || ''} ${job.description?.slice(0, 300) || ''}`.toLowerCase();
-
-    if (/\b(?:lead|principal|staff|architect|director|head of|senior|sr\.?|expert|advanced)\b/i.test(text)) {
-      return ExperienceLevel.SENIOR;
-    }
-    if (/\b(?:junior|jr\.?|entry[- ]level|associate|fresh graduate|trainee)\b/i.test(text)) {
-      return ExperienceLevel.JUNIOR;
-    }
-    if (/\b(?:mid[- ]level|intermediate)\b/i.test(text)) {
-      return ExperienceLevel.MID;
-    }
-
-    return ExperienceLevel.UNKNOWN;
+    return this.seniorityEngine.classify(job);
   }
 
   private resolveWorkType(job: Partial<Job>): WorkType {
-    if (job.workType) {
-      const upper = String(job.workType).toUpperCase().replace('-', '_');
-      if (upper in WorkType) {
-        return upper as WorkType;
-      }
-    }
-
-    const text = `${job.title || ''} ${job.description?.slice(0, 300) || ''}`.toLowerCase();
-
-    if (/\b(?:contract|freelance|contractor|consultant)\b/i.test(text)) {
-      return WorkType.CONTRACT;
-    }
-    if (/\b(?:part[- ]time|parttime)\b/i.test(text)) {
-      return WorkType.PART_TIME;
-    }
-    if (/\b(?:intern|internship|training)\b/i.test(text)) {
-      return WorkType.INTERNSHIP;
-    }
-    if (/\b(?:full[- ]time|fulltime|permanent)\b/i.test(text)) {
-      return WorkType.FULL_TIME;
-    }
-
-    return WorkType.UNKNOWN;
+    return this.workTypeEngine.classify(job);
   }
 }
 

@@ -952,6 +952,254 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-32.1: Seniority Heuristic Engine (Junior, Mid, Senior, Unknown) (#97)', () => {
+    // Acceptance Test Specs from Issue #97
+    it('classifies "Lead Software Architect" as SENIOR (Test Spec #97)', () => {
+      const result = classifier.classify({
+        title: 'Lead Software Architect',
+      });
+      expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+    });
+
+    it('classifies "Entry Level Python Developer" as JUNIOR (Test Spec #97)', () => {
+      const result = classifier.classify({
+        title: 'Entry Level Python Developer',
+      });
+      expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+    });
+
+    describe('English Seniority Title Tokens', () => {
+      it.each([
+        ['Senior Backend Engineer', ExperienceLevel.SENIOR],
+        ['Sr. Fullstack Developer', ExperienceLevel.SENIOR],
+        ['Staff Site Reliability Engineer', ExperienceLevel.SENIOR],
+        ['Principal Cloud Architect', ExperienceLevel.SENIOR],
+        ['Head of Engineering', ExperienceLevel.SENIOR],
+        ['Tech Lead - Mobile Apps', ExperienceLevel.SENIOR],
+        ['Team Lead / Senior QA Engineer', ExperienceLevel.SENIOR],
+        ['Expert Data Scientist', ExperienceLevel.SENIOR],
+        ['Junior Frontend Developer', ExperienceLevel.JUNIOR],
+        ['Jr. Software Engineer', ExperienceLevel.JUNIOR],
+        ['Associate Product Designer', ExperienceLevel.JUNIOR],
+        ['Fresh Graduate AI Engineer', ExperienceLevel.JUNIOR],
+        ['Software Engineering Intern', ExperienceLevel.JUNIOR],
+        ['QA Automation Trainee', ExperienceLevel.JUNIOR],
+        ['Mid-Level Node.js Developer', ExperienceLevel.MID],
+        ['Intermediate Python Engineer', ExperienceLevel.MID],
+        ['Medior DevOps Engineer', ExperienceLevel.MID],
+      ])('classifies title "%s" as %s', (title, expectedLevel) => {
+        const result = classifier.classify({ title });
+        expect(result.experienceLevel).toBe(expectedLevel);
+      });
+    });
+
+    describe('Arabic Seniority Title Tokens', () => {
+      it.each([
+        ['مطور برمجيات خبير', ExperienceLevel.SENIOR],
+        ['مهندس خلفيات أول', ExperienceLevel.SENIOR],
+        ['سينيور فرونت إند', ExperienceLevel.SENIOR],
+        ['قائد فريق البيانات', ExperienceLevel.SENIOR],
+        ['معماري حلول سحابية', ExperienceLevel.SENIOR],
+        ['مطور واجهات مبتدئ', ExperienceLevel.JUNIOR],
+        ['مهندس حاسوب حديث التخرج', ExperienceLevel.JUNIOR],
+        ['متدرب أمن سيبراني', ExperienceLevel.JUNIOR],
+        ['مساعد فاحص جودة برمجيات', ExperienceLevel.JUNIOR],
+        ['مطور تطبيقات متوسط الخبرة', ExperienceLevel.MID],
+        ['مصمم واجهات متوسط', ExperienceLevel.MID],
+      ])('classifies Arabic title "%s" as %s', (title, expectedLevel) => {
+        const result = classifier.classify({ title });
+        expect(result.experienceLevel).toBe(expectedLevel);
+      });
+    });
+
+    describe('Years of Experience Extraction Cues', () => {
+      it('classifies 5+ years in description as SENIOR when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          description: 'Looking for an experienced engineer with 5+ years of experience in distributed systems.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('classifies Arabic 5+ years cue as SENIOR', () => {
+        const result = classifier.classify({
+          title: 'مطور برمجيات',
+          description: 'يشترط وجود خبرة +5 سنوات في تطوير تطبيقات الويب.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('classifies 3-5 years range as MID when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Web Developer',
+          description: 'Requires 3-5 years of experience with React and TypeScript.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.MID);
+      });
+
+      it('classifies 0-2 years range as JUNIOR when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Node.js Developer',
+          description: 'Great opportunity for candidates with 0-2 years experience.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+      });
+
+      it('classifies "under 2 years" cue as JUNIOR', () => {
+        const result = classifier.classify({
+          title: 'Fullstack Developer',
+          description: 'Suitable for developers with less than 2 years of professional background.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+      });
+    });
+
+    describe('Precedence, Contradiction, and Conservative Fallback', () => {
+      it('prioritizes structured experienceLevel from source when provided', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          experienceLevel: 'SENIOR',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('returns UNKNOWN when contradictory seniority tokens are present in title', () => {
+        const result = classifier.classify({
+          title: 'Junior / Senior Software Engineer',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.UNKNOWN);
+      });
+
+      it('leaves generic titles without seniority cues as UNKNOWN (do not invent certainty)', () => {
+        const result = classifier.classify({
+          title: 'Python Developer',
+          description: 'Build backend APIs and collaborate with team members on feature roadmaps.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.UNKNOWN);
+      });
+    });
+  });
+
+  describe('TASK-32.2: Contract & Employment Type Heuristic Engine (#98)', () => {
+    // Acceptance Test Spec from Issue #98
+    it('classifies "Freelance React Developer - 3 months contract" as CONTRACT (Test Spec #98)', () => {
+      const result = classifier.classify({
+        title: 'Freelance React Developer - 3 months contract',
+      });
+      expect(result.workType).toBe(WorkType.CONTRACT);
+    });
+
+    describe('English Work Type Title Tokens', () => {
+      it.each([
+        ['Fullstack Engineer (Contract)', WorkType.CONTRACT],
+        ['Freelance Node.js Developer', WorkType.CONTRACT],
+        ['Cloud Infrastructure Consultant', WorkType.CONTRACT],
+        ['Temporary Python Engineer', WorkType.CONTRACT],
+        ['Frontend Developer (6 months contract)', WorkType.CONTRACT],
+        ['Project-Based SRE Specialist', WorkType.CONTRACT],
+        ['Backend Developer (Part-Time)', WorkType.PART_TIME],
+        ['Part-Time UI/UX Designer', WorkType.PART_TIME],
+        ['Parttime Mobile Developer', WorkType.PART_TIME],
+        ['Software Engineering Intern', WorkType.INTERNSHIP],
+        ['AI / Machine Learning Trainee', WorkType.INTERNSHIP],
+        ['QA Automation Co-op Student', WorkType.INTERNSHIP],
+        ['Senior DevOps Engineer (Full-Time)', WorkType.FULL_TIME],
+        ['Permanent Java Developer', WorkType.FULL_TIME],
+        ['Direct-Hire Security Engineer', WorkType.FULL_TIME],
+      ])('classifies title "%s" as %s', (title, expectedType) => {
+        const result = classifier.classify({ title });
+        expect(result.workType).toBe(expectedType);
+      });
+    });
+
+    describe('Arabic Work Type Title Tokens', () => {
+      it.each([
+        ['مطور برمجيات (عقد مؤقت)', WorkType.CONTRACT],
+        ['مبرمج بايثون مستقل', WorkType.CONTRACT],
+        ['مهندس سحابي عمل حر', WorkType.CONTRACT],
+        ['مطور واجهات فريلانسر', WorkType.CONTRACT],
+        ['مطور واجهات دوام جزئي', WorkType.PART_TIME],
+        ['فاحص برمجيات عمل جزئي', WorkType.PART_TIME],
+        ['متدرب ذكاء اصطناعي', WorkType.INTERNSHIP],
+        ['تدريب تعاوني هندسة برمجيات', WorkType.INTERNSHIP],
+        ['مهندس نظم دوام كامل', WorkType.FULL_TIME],
+        ['مطور خلفيات وظيفة دائمة', WorkType.FULL_TIME],
+        ['تفرغ تام مطور تطبيقات', WorkType.FULL_TIME],
+      ])('classifies Arabic title "%s" as %s', (title, expectedType) => {
+        const result = classifier.classify({ title });
+        expect(result.workType).toBe(expectedType);
+      });
+    });
+
+    describe('Description Work Type Heuristics', () => {
+      it('classifies CONTRACT from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'React Developer',
+          description: 'This is a 6 months contract with potential for extension.',
+        });
+        expect(result.workType).toBe(WorkType.CONTRACT);
+      });
+
+      it('classifies FULL_TIME from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Backend Engineer',
+          description: 'Full-time position with comprehensive healthcare and 401k benefits.',
+        });
+        expect(result.workType).toBe(WorkType.FULL_TIME);
+      });
+
+      it('classifies PART_TIME from Arabic description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'مطور واجهات',
+          description: 'الفرصة عبارة عن عمل جزئي بمعدل 20 ساعة أسبوعياً.',
+        });
+        expect(result.workType).toBe(WorkType.PART_TIME);
+      });
+
+      it('classifies INTERNSHIP from description when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Data Analyst',
+          description: 'Summer internship program for university students.',
+        });
+        expect(result.workType).toBe(WorkType.INTERNSHIP);
+      });
+    });
+
+    describe('Precedence, Contradiction, and Conservative Fallback', () => {
+      it('prioritizes structured workType from source metadata when provided', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          workType: 'CONTRACT',
+        });
+        expect(result.workType).toBe(WorkType.CONTRACT);
+      });
+
+      it('normalizes source variations (e.g. FREELANCE -> CONTRACT, PERMANENT -> FULL_TIME)', () => {
+        expect(
+          classifier.classify({ title: 'Engineer', workType: 'FREELANCE' }).workType,
+        ).toBe(WorkType.CONTRACT);
+        expect(
+          classifier.classify({ title: 'Engineer', workType: 'PERMANENT' }).workType,
+        ).toBe(WorkType.FULL_TIME);
+      });
+
+      it('returns UNKNOWN when contradictory work type tokens are in title', () => {
+        const result = classifier.classify({
+          title: 'Full-time / Part-time Software Engineer',
+        });
+        expect(result.workType).toBe(WorkType.UNKNOWN);
+      });
+
+      it('leaves generic titles without work type cues as UNKNOWN (do not invent certainty)', () => {
+        const result = classifier.classify({
+          title: 'Backend Developer',
+          description: 'Build microservices and contribute to architectural decisions.',
+        });
+        expect(result.workType).toBe(WorkType.UNKNOWN);
+      });
+    });
+  });
+
   describe('Experience Level and Work Type Resolution', () => {
     it('detects Senior level from title', () => {
       const result = classifier.classify({
