@@ -11,7 +11,10 @@ import {
   type ExclusionResult,
 } from './negative-exclusion.matcher.js';
 
+import { SeniorityClassifier, seniorityClassifier } from './seniority.classifier.js';
+
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
+export { SeniorityClassifier, seniorityClassifier };
 export {
   GeminiAmbiguityResolver,
   geminiAmbiguityResolver,
@@ -75,6 +78,7 @@ interface TokenEntry {
 export class DeterministicJobClassifier {
   constructor(
     private readonly exclusionMatcher: NegativeExclusionMatcher = negativeExclusionMatcher,
+    private readonly seniorityEngine: SeniorityClassifier = seniorityClassifier,
   ) {}
 
   /**
@@ -795,28 +799,7 @@ export class DeterministicJobClassifier {
   }
 
   private resolveExperienceLevel(job: Partial<Job>): ExperienceLevel {
-    if (job.experienceLevel) {
-      const upper = String(job.experienceLevel).toUpperCase();
-      if (upper === 'JUNIOR' || upper === 'ENTRY') return ExperienceLevel.JUNIOR;
-      if (upper === 'MID') return ExperienceLevel.MID;
-      if (upper === 'SENIOR' || upper === 'LEAD' || upper === 'PRINCIPAL') {
-        return ExperienceLevel.SENIOR;
-      }
-    }
-
-    const text = `${job.title || ''} ${job.description?.slice(0, 300) || ''}`.toLowerCase();
-
-    if (/\b(?:lead|principal|staff|architect|director|head of|senior|sr\.?|expert|advanced)\b/i.test(text)) {
-      return ExperienceLevel.SENIOR;
-    }
-    if (/\b(?:junior|jr\.?|entry[- ]level|associate|fresh graduate|trainee)\b/i.test(text)) {
-      return ExperienceLevel.JUNIOR;
-    }
-    if (/\b(?:mid[- ]level|intermediate)\b/i.test(text)) {
-      return ExperienceLevel.MID;
-    }
-
-    return ExperienceLevel.UNKNOWN;
+    return this.seniorityEngine.classify(job);
   }
 
   private resolveWorkType(job: Partial<Job>): WorkType {

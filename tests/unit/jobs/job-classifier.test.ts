@@ -952,6 +952,134 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-32.1: Seniority Heuristic Engine (Junior, Mid, Senior, Unknown) (#97)', () => {
+    // Acceptance Test Specs from Issue #97
+    it('classifies "Lead Software Architect" as SENIOR (Test Spec #97)', () => {
+      const result = classifier.classify({
+        title: 'Lead Software Architect',
+      });
+      expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+    });
+
+    it('classifies "Entry Level Python Developer" as JUNIOR (Test Spec #97)', () => {
+      const result = classifier.classify({
+        title: 'Entry Level Python Developer',
+      });
+      expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+    });
+
+    describe('English Seniority Title Tokens', () => {
+      it.each([
+        ['Senior Backend Engineer', ExperienceLevel.SENIOR],
+        ['Sr. Fullstack Developer', ExperienceLevel.SENIOR],
+        ['Staff Site Reliability Engineer', ExperienceLevel.SENIOR],
+        ['Principal Cloud Architect', ExperienceLevel.SENIOR],
+        ['Head of Engineering', ExperienceLevel.SENIOR],
+        ['Tech Lead - Mobile Apps', ExperienceLevel.SENIOR],
+        ['Team Lead / Senior QA Engineer', ExperienceLevel.SENIOR],
+        ['Expert Data Scientist', ExperienceLevel.SENIOR],
+        ['Junior Frontend Developer', ExperienceLevel.JUNIOR],
+        ['Jr. Software Engineer', ExperienceLevel.JUNIOR],
+        ['Associate Product Designer', ExperienceLevel.JUNIOR],
+        ['Fresh Graduate AI Engineer', ExperienceLevel.JUNIOR],
+        ['Software Engineering Intern', ExperienceLevel.JUNIOR],
+        ['QA Automation Trainee', ExperienceLevel.JUNIOR],
+        ['Mid-Level Node.js Developer', ExperienceLevel.MID],
+        ['Intermediate Python Engineer', ExperienceLevel.MID],
+        ['Medior DevOps Engineer', ExperienceLevel.MID],
+      ])('classifies title "%s" as %s', (title, expectedLevel) => {
+        const result = classifier.classify({ title });
+        expect(result.experienceLevel).toBe(expectedLevel);
+      });
+    });
+
+    describe('Arabic Seniority Title Tokens', () => {
+      it.each([
+        ['مطور برمجيات خبير', ExperienceLevel.SENIOR],
+        ['مهندس خلفيات أول', ExperienceLevel.SENIOR],
+        ['سينيور فرونت إند', ExperienceLevel.SENIOR],
+        ['قائد فريق البيانات', ExperienceLevel.SENIOR],
+        ['معماري حلول سحابية', ExperienceLevel.SENIOR],
+        ['مطور واجهات مبتدئ', ExperienceLevel.JUNIOR],
+        ['مهندس حاسوب حديث التخرج', ExperienceLevel.JUNIOR],
+        ['متدرب أمن سيبراني', ExperienceLevel.JUNIOR],
+        ['مساعد فاحص جودة برمجيات', ExperienceLevel.JUNIOR],
+        ['مطور تطبيقات متوسط الخبرة', ExperienceLevel.MID],
+        ['مصمم واجهات متوسط', ExperienceLevel.MID],
+      ])('classifies Arabic title "%s" as %s', (title, expectedLevel) => {
+        const result = classifier.classify({ title });
+        expect(result.experienceLevel).toBe(expectedLevel);
+      });
+    });
+
+    describe('Years of Experience Extraction Cues', () => {
+      it('classifies 5+ years in description as SENIOR when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          description: 'Looking for an experienced engineer with 5+ years of experience in distributed systems.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('classifies Arabic 5+ years cue as SENIOR', () => {
+        const result = classifier.classify({
+          title: 'مطور برمجيات',
+          description: 'يشترط وجود خبرة +5 سنوات في تطوير تطبيقات الويب.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('classifies 3-5 years range as MID when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Web Developer',
+          description: 'Requires 3-5 years of experience with React and TypeScript.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.MID);
+      });
+
+      it('classifies 0-2 years range as JUNIOR when title is generic', () => {
+        const result = classifier.classify({
+          title: 'Node.js Developer',
+          description: 'Great opportunity for candidates with 0-2 years experience.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+      });
+
+      it('classifies "under 2 years" cue as JUNIOR', () => {
+        const result = classifier.classify({
+          title: 'Fullstack Developer',
+          description: 'Suitable for developers with less than 2 years of professional background.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.JUNIOR);
+      });
+    });
+
+    describe('Precedence, Contradiction, and Conservative Fallback', () => {
+      it('prioritizes structured experienceLevel from source when provided', () => {
+        const result = classifier.classify({
+          title: 'Software Engineer',
+          experienceLevel: 'SENIOR',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.SENIOR);
+      });
+
+      it('returns UNKNOWN when contradictory seniority tokens are present in title', () => {
+        const result = classifier.classify({
+          title: 'Junior / Senior Software Engineer',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.UNKNOWN);
+      });
+
+      it('leaves generic titles without seniority cues as UNKNOWN (do not invent certainty)', () => {
+        const result = classifier.classify({
+          title: 'Python Developer',
+          description: 'Build backend APIs and collaborate with team members on feature roadmaps.',
+        });
+        expect(result.experienceLevel).toBe(ExperienceLevel.UNKNOWN);
+      });
+    });
+  });
+
   describe('Experience Level and Work Type Resolution', () => {
     it('detects Senior level from title', () => {
       const result = classifier.classify({
