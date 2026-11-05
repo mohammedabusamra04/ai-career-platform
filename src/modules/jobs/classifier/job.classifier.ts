@@ -12,9 +12,11 @@ import {
 } from './negative-exclusion.matcher.js';
 
 import { SeniorityClassifier, seniorityClassifier } from './seniority.classifier.js';
+import { WorkTypeClassifier, workTypeClassifier } from './work-type.classifier.js';
 
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
 export { SeniorityClassifier, seniorityClassifier };
+export { WorkTypeClassifier, workTypeClassifier };
 export {
   GeminiAmbiguityResolver,
   geminiAmbiguityResolver,
@@ -79,6 +81,7 @@ export class DeterministicJobClassifier {
   constructor(
     private readonly exclusionMatcher: NegativeExclusionMatcher = negativeExclusionMatcher,
     private readonly seniorityEngine: SeniorityClassifier = seniorityClassifier,
+    private readonly workTypeEngine: WorkTypeClassifier = workTypeClassifier,
   ) {}
 
   /**
@@ -803,29 +806,7 @@ export class DeterministicJobClassifier {
   }
 
   private resolveWorkType(job: Partial<Job>): WorkType {
-    if (job.workType) {
-      const upper = String(job.workType).toUpperCase().replace('-', '_');
-      if (upper in WorkType) {
-        return upper as WorkType;
-      }
-    }
-
-    const text = `${job.title || ''} ${job.description?.slice(0, 300) || ''}`.toLowerCase();
-
-    if (/\b(?:contract|freelance|contractor|consultant)\b/i.test(text)) {
-      return WorkType.CONTRACT;
-    }
-    if (/\b(?:part[- ]time|parttime)\b/i.test(text)) {
-      return WorkType.PART_TIME;
-    }
-    if (/\b(?:intern|internship|training)\b/i.test(text)) {
-      return WorkType.INTERNSHIP;
-    }
-    if (/\b(?:full[- ]time|fulltime|permanent)\b/i.test(text)) {
-      return WorkType.FULL_TIME;
-    }
-
-    return WorkType.UNKNOWN;
+    return this.workTypeEngine.classify(job);
   }
 }
 
