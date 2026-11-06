@@ -13,10 +13,16 @@ import {
 
 import { SeniorityClassifier, seniorityClassifier } from './seniority.classifier.js';
 import { WorkTypeClassifier, workTypeClassifier } from './work-type.classifier.js';
+import {
+  RemoteScopeClassifier,
+  remoteScopeClassifier,
+  type RemoteScopeClassification,
+} from './remote-scope.classifier.js';
 
 export { NegativeExclusionMatcher, negativeExclusionMatcher, type ExclusionResult };
 export { SeniorityClassifier, seniorityClassifier };
 export { WorkTypeClassifier, workTypeClassifier };
+export { RemoteScopeClassifier, remoteScopeClassifier, type RemoteScopeClassification };
 export {
   GeminiAmbiguityResolver,
   geminiAmbiguityResolver,
@@ -36,6 +42,8 @@ export interface ClassificationResult {
   primarySpecialization: Specialization | null;
   secondarySpecialization: Specialization | null;
   remoteScope: RemoteScope;
+  country?: string | null;
+  remoteScopeEvidence?: string;
   experienceLevel: ExperienceLevel;
   workType: WorkType;
   confidence: number;
@@ -82,6 +90,7 @@ export class DeterministicJobClassifier {
     private readonly exclusionMatcher: NegativeExclusionMatcher = negativeExclusionMatcher,
     private readonly seniorityEngine: SeniorityClassifier = seniorityClassifier,
     private readonly workTypeEngine: WorkTypeClassifier = workTypeClassifier,
+    private readonly remoteScopeEngine: RemoteScopeClassifier = remoteScopeClassifier,
   ) {}
 
   /**
@@ -625,7 +634,7 @@ export class DeterministicJobClassifier {
     }
 
     // 2. Determine Remote Scope
-    const remoteScope = this.resolveRemoteScope(job);
+    const remoteResult = this.resolveRemoteScope(job);
 
     // 3. Determine Experience Level
     const experienceLevel = this.resolveExperienceLevel(job);
@@ -636,7 +645,9 @@ export class DeterministicJobClassifier {
     return {
       primarySpecialization,
       secondarySpecialization,
-      remoteScope,
+      remoteScope: remoteResult.scope,
+      country: remoteResult.country ?? job.country ?? null,
+      remoteScopeEvidence: remoteResult.evidence,
       experienceLevel,
       workType,
       confidence,
@@ -774,31 +785,8 @@ export class DeterministicJobClassifier {
     return deterministic;
   }
 
-  private resolveRemoteScope(job: Partial<Job>): RemoteScope {
-    const text = `${job.title || ''} ${job.location || ''} ${job.description?.slice(0, 300) || ''}`.toLowerCase();
-
-    if (/\b(?:worldwide|global|anywhere|world-wide|everywhere)\b/i.test(text)) {
-      return RemoteScope.WORLDWIDE;
-    }
-
-    if (/\b(?:mena|middle east|gcc|latam|emea|europe|north america|arab)\b/i.test(text)) {
-      return RemoteScope.REGION;
-    }
-
-    if (
-      job.country ||
-      /\b(?:egypt|saudi arabia|uae|united arab emirates|qatar|kuwait|germany|usa|uk|canada)\b/i.test(
-        text,
-      )
-    ) {
-      return RemoteScope.COUNTRY;
-    }
-
-    if (job.remote) {
-      return RemoteScope.WORLDWIDE;
-    }
-
-    return RemoteScope.UNKNOWN;
+  public resolveRemoteScope(job: Partial<Job>): RemoteScopeClassification {
+    return this.remoteScopeEngine.classify(job);
   }
 
   private resolveExperienceLevel(job: Partial<Job>): ExperienceLevel {
