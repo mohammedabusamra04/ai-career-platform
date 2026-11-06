@@ -44,6 +44,7 @@ export interface ClassificationResult {
   remoteScope: RemoteScope;
   country?: string | null;
   remoteScopeEvidence?: string;
+  remoteConfidence?: number;
   experienceLevel: ExperienceLevel;
   workType: WorkType;
   confidence: number;
@@ -648,6 +649,7 @@ export class DeterministicJobClassifier {
       remoteScope: remoteResult.scope,
       country: remoteResult.country ?? job.country ?? null,
       remoteScopeEvidence: remoteResult.evidence,
+      remoteConfidence: remoteResult.confidence,
       experienceLevel,
       workType,
       confidence,

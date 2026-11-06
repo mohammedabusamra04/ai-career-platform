@@ -4,7 +4,9 @@ import type { Job } from '../job.types.js';
 export interface RemoteScopeClassification {
   scope: RemoteScope;
   country: string | null;
+  confidence: number;
   evidence: string;
+  hasContradiction?: boolean;
 }
 
 /**
@@ -173,7 +175,8 @@ export class RemoteScopeClassifier {
     /(?:(?:must reside in|must be based in|only for residents of|residents? of|based in|located in|living in|only in)\s+([a-zA-Z\s]+))|(?:(?:remote|عن\s+بعد)\s*[-–—:]\s*([a-zA-Z\u0621-\u064A\s]+?)(?:\s*(?:only|فقط))?(?=[,\n\r.)]|$))|(?:([a-zA-Z\s]+)\s+residents?\s+only)|(?:(?:يشترط\s+الإقامة\s+في|للمقيمين\s+في|داخل)\s+([a-zA-Z\u0621-\u064A\s]+))/i;
 
   /**
-   * Classifies the remote scope and extracted country constraint for a job.
+   * Classifies the remote scope, extracted country constraint, and evidence-based confidence for a job.
+   * Detects and strictly arbitrates contradictions between broad remote claims and geographic restrictions.
    */
   public classify(job: Partial<Job>): RemoteScopeClassification {
     const title = (job.title || '').trim();
@@ -183,39 +186,83 @@ export class RemoteScopeClassifier {
 
     const fullText = `${title} ${location} ${description}`;
 
+    // Detect if title/location/metadata claims broad remote or worldwide
+    const titleHasRemote = /\b(?:remote|عن\s+بعد)\b/i.test(title);
+    const hasBroadWorldwideEvidence =
+      RemoteScopeClassifier.WORLDWIDE_REGEX.test(fullText) ||
+      /\b(?:anywhere|everywhere)\b/i.test(location) ||
+      Boolean(job.remote);
+
     // 1. Check for explicit Country restrictions (Highest Precedence - overrides generic remote)
-    const detectedCountry = this.extractCountryConstraint(
+    const countryResult = this.extractCountryConstraint(
       title,
       location,
       description,
       structuredCountry,
     );
 
-    if (detectedCountry) {
+    if (countryResult) {
+      const isContradiction = hasBroadWorldwideEvidence || titleHasRemote;
+      const confidence =
+        countryResult.source === 'STRUCTURED' || countryResult.source === 'TITLE'
+          ? 0.95
+          : countryResult.source === 'LOCATION'
+            ? 0.9
+            : 0.85;
+
+      const contradictionNote = isContradiction
+        ? ` [Contradiction resolved: Overrode generic remote claim with country constraint ${countryResult.code}]`
+        : '';
+
       return {
         scope: RemoteScope.COUNTRY,
-        country: detectedCountry,
-        evidence: `Country restriction detected: ${detectedCountry}`,
+        country: countryResult.code,
+        confidence,
+        evidence: `Country restriction detected from ${countryResult.source}: ${countryResult.code}${contradictionNote}`,
+        hasContradiction: isContradiction,
       };
     }
 
     // 2. Check for Regional restrictions (MENA, GCC, Europe, etc.)
     const regionMatch = fullText.match(RemoteScopeClassifier.REGION_REGEX);
     if (regionMatch) {
+      const isContradiction = hasBroadWorldwideEvidence;
+      const inTitle = RemoteScopeClassifier.REGION_REGEX.test(title);
+      const confidence = inTitle ? 0.95 : 0.85;
+
+      const contradictionNote = isContradiction
+        ? ` [Contradiction resolved: Regional restriction "${regionMatch[0]}" overrides generic worldwide claim]`
+        : '';
+
       return {
         scope: RemoteScope.REGION,
         country: null,
-        evidence: `Regional constraint detected: ${regionMatch[0]}`,
+        confidence,
+        evidence: `Regional constraint detected: ${regionMatch[0]}${contradictionNote}`,
+        hasContradiction: isContradiction,
       };
     }
 
     // 3. Check for Affirmative Worldwide evidence (Golden Rule: explicit affirmative keywords required)
-    const worldwideMatch = fullText.match(RemoteScopeClassifier.WORLDWIDE_REGEX);
-    if (worldwideMatch) {
+    const worldwideTitleMatch = title.match(RemoteScopeClassifier.WORLDWIDE_REGEX);
+    if (worldwideTitleMatch) {
       return {
         scope: RemoteScope.WORLDWIDE,
         country: null,
-        evidence: `Affirmative worldwide keywords: "${worldwideMatch[0]}"`,
+        confidence: 0.95,
+        evidence: `Affirmative worldwide keywords in title: "${worldwideTitleMatch[0]}"`,
+        hasContradiction: false,
+      };
+    }
+
+    const worldwideTextMatch = fullText.match(RemoteScopeClassifier.WORLDWIDE_REGEX);
+    if (worldwideTextMatch) {
+      return {
+        scope: RemoteScope.WORLDWIDE,
+        country: null,
+        confidence: 0.85,
+        evidence: `Affirmative worldwide keywords: "${worldwideTextMatch[0]}"`,
+        hasContradiction: false,
       };
     }
 
@@ -224,7 +271,9 @@ export class RemoteScopeClassifier {
       return {
         scope: RemoteScope.WORLDWIDE,
         country: null,
+        confidence: 0.9,
         evidence: `Location explicitly specified: "${location}"`,
+        hasContradiction: false,
       };
     }
 
@@ -233,7 +282,9 @@ export class RemoteScopeClassifier {
       return {
         scope: RemoteScope.WORLDWIDE,
         country: null,
+        confidence: 0.8,
         evidence: 'Source remote flag without geographic restrictions',
+        hasContradiction: false,
       };
     }
 
@@ -241,31 +292,38 @@ export class RemoteScopeClassifier {
     return {
       scope: RemoteScope.UNKNOWN,
       country: null,
+      confidence: 0.0,
       evidence: 'No conclusive remote scope evidence',
+      hasContradiction: false,
     };
   }
 
   /**
-   * Extracts country constraint and maps to ISO 3166-1 alpha-2 code.
+   * Extracts country constraint and maps to ISO 3166-1 alpha-2 code with evidence source.
    */
   private extractCountryConstraint(
     title: string,
     location: string,
     description: string,
     structuredCountry?: string,
-  ): string | null {
+  ): { code: string; source: 'STRUCTURED' | 'TITLE' | 'LOCATION' | 'DESCRIPTION' } | null {
     // 1. Structured country code / name passed directly
     if (structuredCountry) {
       const normalized = this.normalizeCountryCode(structuredCountry);
-      if (normalized) return normalized;
+      if (normalized) return { code: normalized, source: 'STRUCTURED' };
     }
 
     // 2. Explicit restriction phrases in title, location, or description
     // e.g. "Must reside in Germany", "Remote - USA only", "عن بعد - السعودية فقط"
-    const textSources = [location, title, description];
-    for (const text of textSources) {
-      if (!text) continue;
-      const match = text.match(RemoteScopeClassifier.RESTRICTION_PHRASES_REGEX);
+    const textSources: Array<{ text: string; source: 'LOCATION' | 'TITLE' | 'DESCRIPTION' }> = [
+      { text: title, source: 'TITLE' },
+      { text: location, source: 'LOCATION' },
+      { text: description, source: 'DESCRIPTION' },
+    ];
+
+    for (const item of textSources) {
+      if (!item.text) continue;
+      const match = item.text.match(RemoteScopeClassifier.RESTRICTION_PHRASES_REGEX);
       if (match) {
         let rawCountry = (match[1] || match[2] || match[3] || match[4] || '').trim().toLowerCase();
         // Clean up common surrounding stop words like "only", "فقط", punctuation
@@ -275,7 +333,7 @@ export class RemoteScopeClassifier {
           .replace(/(?:فقط|داخل)/g, '')
           .trim();
         const code = this.normalizeCountryCode(rawCountry);
-        if (code) return code;
+        if (code) return { code, source: item.source };
       }
     }
 
@@ -284,21 +342,22 @@ export class RemoteScopeClassifier {
       for (const [key, code] of Object.entries(RemoteScopeClassifier.COUNTRY_MAP)) {
         const regex = new RegExp(`\\b${key}\\b`, 'i');
         if (regex.test(location)) {
-          return code;
+          return { code, source: 'LOCATION' };
         }
       }
     }
 
     // 4. Direct country token mention in title or description with restriction context
-    const fullText = `${title} ${description}`.toLowerCase();
     for (const [key, code] of Object.entries(RemoteScopeClassifier.COUNTRY_MAP)) {
-      // Must have restriction context if checking in broad description/title
       const pattern = new RegExp(
         `(?:\\b(?:reside in|based in|citizens? of|residents? of|only in|remote\\s*[-–—:]?\\s*)\\s*${key}\\b)|(?:\\b${key}\\s*(?:only|فقط)\\b)`,
         'i',
       );
-      if (pattern.test(fullText)) {
-        return code;
+      if (title && pattern.test(title)) {
+        return { code, source: 'TITLE' };
+      }
+      if (description && pattern.test(description)) {
+        return { code, source: 'DESCRIPTION' };
       }
     }
 
