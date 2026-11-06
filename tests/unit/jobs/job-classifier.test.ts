@@ -4,6 +4,8 @@ import {
   deterministicJobClassifier,
   NegativeExclusionMatcher,
   negativeExclusionMatcher,
+  RemoteScopeClassifier,
+  remoteScopeClassifier,
   type AmbiguityResolver,
   GeminiAmbiguityResolver,
   AIAmbiguityResolutionSchema,
@@ -999,6 +1001,7 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
         // Golden Rule: Geographic restriction strictly overrides generic remote claim
         expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
         expect(result.country).toBe('DE');
+        expect(result.remoteScopeEvidence).toContain('DE');
       });
 
       it('leaves postings without remote evidence or location as UNKNOWN', () => {
@@ -1009,6 +1012,112 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
 
         expect(result.remoteScope).toBe(RemoteScope.UNKNOWN);
         expect(result.country).toBeNull();
+      });
+    });
+  });
+
+  describe('TASK-33.2: Evidence-Based Confidence Scoring & Contradiction Detection (#100)', () => {
+    describe('Confidence Scoring Calibration', () => {
+      it('assigns high confidence (0.95) for explicit country in title', () => {
+        const result = classifier.classify({
+          title: 'Backend Engineer (Remote - USA only)',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
+        expect(result.country).toBe('US');
+        expect(result.remoteConfidence).toBe(0.95);
+      });
+
+      it('assigns high confidence (0.95) for structured country metadata', () => {
+        const result = classifier.classify({
+          title: 'Fullstack Engineer',
+          country: 'EG',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
+        expect(result.country).toBe('EG');
+        expect(result.remoteConfidence).toBe(0.95);
+      });
+
+      it('assigns 0.85 confidence for country restriction in description only', () => {
+        const result = classifier.classify({
+          title: 'Senior DevOps Specialist',
+          description: 'Great team and culture. Candidates must reside in Germany.',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
+        expect(result.country).toBe('DE');
+        expect(result.remoteConfidence).toBe(0.85);
+      });
+
+      it('assigns 0.95 confidence for affirmative worldwide in title', () => {
+        const result = classifier.classify({
+          title: 'Site Reliability Engineer (Work from anywhere)',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.WORLDWIDE);
+        expect(result.remoteConfidence).toBe(0.95);
+      });
+
+      it('assigns 0.85 confidence for affirmative worldwide in description', () => {
+        const result = classifier.classify({
+          title: 'Senior Cloud Engineer',
+          description: 'Our company is 100% remote. You can work anywhere in the world.',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.WORLDWIDE);
+        expect(result.remoteConfidence).toBe(0.85);
+      });
+
+      it('assigns 0.0 confidence when remote scope is UNKNOWN', () => {
+        const result = classifier.classify({
+          title: 'Java Developer',
+          description: 'Responsible for backend services and spring boot components.',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.UNKNOWN);
+        expect(result.remoteConfidence).toBe(0.0);
+      });
+    });
+
+    describe('Contradiction Detection & Arbitration', () => {
+      it('detects contradiction and overrides generic "Remote" with Country constraint (Test Spec #100)', () => {
+        const directResult = remoteScopeClassifier.classify({
+          title: 'Remote Senior Python Developer',
+          description: 'This is a remote role. However, candidates must reside in Germany for payroll compliance.',
+        });
+
+        expect(directResult.scope).toBe(RemoteScope.COUNTRY);
+        expect(directResult.country).toBe('DE');
+        expect(directResult.hasContradiction).toBe(true);
+        expect(directResult.evidence).toContain('Contradiction resolved');
+      });
+
+      it('detects contradiction when title says Worldwide but description restricts to MENA region', () => {
+        const directResult = remoteScopeClassifier.classify({
+          title: 'Worldwide Frontend Engineer',
+          description: 'We are hiring across the MENA region only.',
+        });
+
+        expect(directResult.scope).toBe(RemoteScope.REGION);
+        expect(directResult.hasContradiction).toBe(true);
+        expect(directResult.evidence).toContain('Contradiction resolved');
+      });
+
+      it('detects contradiction when location is Anywhere but description specifies UK only', () => {
+        const directResult = remoteScopeClassifier.classify({
+          title: 'Security Analyst',
+          location: 'Anywhere',
+          description: 'Notice: Only for residents of United Kingdom.',
+        });
+
+        expect(directResult.scope).toBe(RemoteScope.COUNTRY);
+        expect(directResult.country).toBe('GB');
+        expect(directResult.hasContradiction).toBe(true);
+      });
+
+      it('marks hasContradiction false when title and constraints are aligned', () => {
+        const directResult = remoteScopeClassifier.classify({
+          title: 'Frontend Engineer (Work from anywhere)',
+          description: 'Join our fully global remote team!',
+        });
+
+        expect(directResult.scope).toBe(RemoteScope.WORLDWIDE);
+        expect(directResult.hasContradiction).toBe(false);
       });
     });
   });
