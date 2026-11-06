@@ -913,6 +913,106 @@ describe('DeterministicJobClassifier - 10-Domain Specialization Classifier (TASK
     });
   });
 
+  describe('TASK-33.1: 4-Tier Scope Categorization (WORLDWIDE, REGION, COUNTRY, UNKNOWN) (#99)', () => {
+    // Acceptance Test Specs from Issue #99
+    it('classifies "Remote Frontend Engineer (Must reside in Germany)" as COUNTRY (DE) (Test Spec #99)', () => {
+      const result = classifier.classify({
+        title: 'Remote Frontend Engineer (Must reside in Germany)',
+      });
+
+      expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
+      expect(result.country).toBe('DE');
+      expect(result.remoteScopeEvidence).toContain('DE');
+    });
+
+    it('classifies "Remote Node.js Developer (Worldwide / Work from anywhere)" as WORLDWIDE (Test Spec #99)', () => {
+      const result = classifier.classify({
+        title: 'Remote Node.js Developer (Worldwide / Work from anywhere)',
+      });
+
+      expect(result.remoteScope).toBe(RemoteScope.WORLDWIDE);
+      expect(result.country).toBeNull();
+      expect(result.remoteScopeEvidence).toContain('Worldwide');
+    });
+
+    describe('Country Restriction Parsing (ISO-2 Mappings)', () => {
+      it.each([
+        ['Remote Fullstack Engineer - USA only', RemoteScope.COUNTRY, 'US'],
+        ['Senior Backend Developer (Must be based in Egypt)', RemoteScope.COUNTRY, 'EG'],
+        ['DevOps Engineer (UK residents only)', RemoteScope.COUNTRY, 'GB'],
+        ['QA Engineer (Based in Canada)', RemoteScope.COUNTRY, 'CA'],
+        ['Cloud Engineer (Must reside in France)', RemoteScope.COUNTRY, 'FR'],
+        ['Fullstack Developer (Based in Netherlands)', RemoteScope.COUNTRY, 'NL'],
+        ['مطور واجهات عن بعد - السعودية فقط', RemoteScope.COUNTRY, 'SA'],
+        ['مهندس برمجيات (يشترط الإقامة في الإمارات)', RemoteScope.COUNTRY, 'AE'],
+        ['مبرمج بايثون (للمقيمين في الأردن)', RemoteScope.COUNTRY, 'JO'],
+        ['فاحص جودة برمجيات (داخل مصر فقط)', RemoteScope.COUNTRY, 'EG'],
+      ])('classifies "%s" as scope %s with country %s', (title, expectedScope, expectedCountry) => {
+        const result = classifier.classify({ title });
+        expect(result.remoteScope).toBe(expectedScope);
+        expect(result.country).toBe(expectedCountry);
+      });
+    });
+
+    describe('Regional Scope Parsing', () => {
+      it.each([
+        ['Mobile Developer (MENA Region)', RemoteScope.REGION],
+        ['Data Analyst (Europe / EU remote)', RemoteScope.REGION],
+        ['Cloud Architect (LATAM remote)', RemoteScope.REGION],
+        ['Site Reliability Engineer (GCC Remote)', RemoteScope.REGION],
+        ['مطور تطبيقات (الشرق الأوسط والخليج)', RemoteScope.REGION],
+        ['مهندس بيانات (شمال إفريقيا)', RemoteScope.REGION],
+      ])('classifies "%s" as %s', (title, expectedScope) => {
+        const result = classifier.classify({ title });
+        expect(result.remoteScope).toBe(expectedScope);
+      });
+    });
+
+    describe('Worldwide Scope & The Golden Rule', () => {
+      it.each([
+        ['Senior Software Engineer (Work from anywhere)', RemoteScope.WORLDWIDE],
+        ['Node.js Developer (Anywhere in the world)', RemoteScope.WORLDWIDE],
+        ['Rust Systems Engineer (Global Remote)', RemoteScope.WORLDWIDE],
+        ['مبرمج بايثون عن بعد (من أي مكان في العالم)', RemoteScope.WORLDWIDE],
+      ])('classifies "%s" as %s with affirmative evidence', (title, expectedScope) => {
+        const result = classifier.classify({ title });
+        expect(result.remoteScope).toBe(expectedScope);
+        expect(result.country).toBeNull();
+      });
+
+      it('classifies location "Anywhere" as WORLDWIDE', () => {
+        const result = classifier.classify({
+          title: 'Fullstack Engineer',
+          location: 'Anywhere',
+        });
+        expect(result.remoteScope).toBe(RemoteScope.WORLDWIDE);
+      });
+    });
+
+    describe('Precedence & Contradiction Resolution', () => {
+      it('resolves contradiction in favor of geographic restriction over generic remote claim', () => {
+        const result = classifier.classify({
+          title: 'Remote Software Engineer',
+          description: 'This is a remote position. Candidates must reside in Germany and possess valid EU work permits.',
+        });
+
+        // Golden Rule: Geographic restriction strictly overrides generic remote claim
+        expect(result.remoteScope).toBe(RemoteScope.COUNTRY);
+        expect(result.country).toBe('DE');
+      });
+
+      it('leaves postings without remote evidence or location as UNKNOWN', () => {
+        const result = classifier.classify({
+          title: 'Senior Software Engineer',
+          description: 'Build backend APIs and collaborate with team members on feature roadmaps.',
+        });
+
+        expect(result.remoteScope).toBe(RemoteScope.UNKNOWN);
+        expect(result.country).toBeNull();
+      });
+    });
+  });
+
   describe('Remote Scope Resolution', () => {
     it('detects Worldwide remote scope from explicit keywords', () => {
       const result = classifier.classify({
